@@ -10,6 +10,8 @@ const DEFAULT_HISTORY_CAP = 20;
 export function useGraphHistory(historyCap = DEFAULT_HISTORY_CAP) {
   const [history, setHistory] = useState<Node[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const historyRef = useRef(history);
+  historyRef.current = history;
   const historyIndexRef = useRef(historyIndex);
   historyIndexRef.current = historyIndex;
 
@@ -24,17 +26,17 @@ export function useGraphHistory(historyCap = DEFAULT_HISTORY_CAP) {
   );
 
   const resetHistory = useCallback(() => {
+    historyRef.current = [];
     setHistory([]);
     setHistoryIndex(-1);
   }, []);
 
   const initializeHistory = useCallback((nodes: Node[]) => {
-    if (nodes.length === 0) return;
-    setHistory(prev => {
-      if (prev.length > 0) return prev;
-      queueMicrotask(() => setHistoryIndex(0));
-      return [cloneNodeSnapshots(nodes)];
-    });
+    if (nodes.length === 0 || historyRef.current.length > 0) return;
+    const snapshot = cloneNodeSnapshots(nodes);
+    historyRef.current = [snapshot];
+    setHistory([snapshot]);
+    setHistoryIndex(0);
   }, []);
 
   const undo = useCallback(

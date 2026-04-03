@@ -6,6 +6,12 @@ export type CompletedReleaseGateResultEntry = {
   completedAtMs: number;
 };
 
+export type ReleaseGateReportHydrationTarget = {
+  reportId: string;
+  createdAt: string | null;
+  sessionResult: ReleaseGateResult | null;
+};
+
 export function mergeCompletedReleaseGateEntries(
   current: CompletedReleaseGateResultEntry[],
   incoming: CompletedReleaseGateResultEntry[]
@@ -25,6 +31,42 @@ export function mergeCompletedReleaseGateEntries(
     }
   }
   return Array.from(byReportId.values()).sort((a, b) => b.completedAtMs - a.completedAtMs);
+}
+
+export function removeCompletedReleaseGateEntry(
+  current: CompletedReleaseGateResultEntry[],
+  reportId: string
+): CompletedReleaseGateResultEntry[] {
+  const normalizedReportId = String(reportId || "").trim();
+  if (!normalizedReportId) return current;
+  return current.filter(entry => String(entry.reportId || "").trim() !== normalizedReportId);
+}
+
+export function removeDismissedReleaseGateReportId(current: string[], reportId: string): string[] {
+  const normalizedReportId = String(reportId || "").trim();
+  if (!normalizedReportId) return current;
+  return current.filter(id => String(id || "").trim() !== normalizedReportId);
+}
+
+export function buildReleaseGateReportHydrationTargets(
+  items: Array<
+    Pick<ReleaseGateHistoryItem, "report_id" | "created_at" | "session_created_at" | "session_result">
+  >,
+  limit: number
+): ReleaseGateReportHydrationTarget[] {
+  const seenReportIds = new Set<string>();
+  return items
+    .map(item => ({
+      reportId: String(item.report_id || "").trim(),
+      createdAt: item.session_created_at ?? item.created_at ?? null,
+      sessionResult: item.session_result ?? null,
+    }))
+    .filter(item => {
+      if (!item.reportId || seenReportIds.has(item.reportId)) return false;
+      seenReportIds.add(item.reportId);
+      return true;
+    })
+    .slice(0, Math.max(0, limit));
 }
 
 export function parseCompletedAtMs(value: unknown): number {

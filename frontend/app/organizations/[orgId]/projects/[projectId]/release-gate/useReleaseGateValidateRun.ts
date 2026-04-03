@@ -27,9 +27,12 @@ import {
 import { getProjectAccessErrorCopy, isProjectPermissionError } from "@/lib/projectAccess";
 import { useToast } from "@/components/ToastContainer";
 import {
+  buildReleaseGateReportHydrationTargets,
   mapExportedReportToCompletedReleaseGateEntry,
   mapHistoryItemToCompletedReleaseGateEntry,
   mergeCompletedReleaseGateEntries,
+  removeCompletedReleaseGateEntry,
+  removeDismissedReleaseGateReportId,
   type CompletedReleaseGateResultEntry,
 } from "./releaseGateResultHydration";
 export type { CompletedReleaseGateResultEntry } from "./releaseGateResultHydration";
@@ -289,7 +292,7 @@ export function useReleaseGateValidateRun(options: {
     if (!normalizedReportId) return;
     setCompletedResultsByAgentId(prev => {
       const current = prev[normalizedAgentId] ?? [];
-      const next = current.filter(entry => entry.reportId !== normalizedReportId);
+      const next = removeCompletedReleaseGateEntry(current, normalizedReportId);
       if (next.length === current.length) return prev;
       return {
         ...prev,
@@ -301,7 +304,7 @@ export function useReleaseGateValidateRun(options: {
       if (!current.includes(normalizedReportId)) return prev;
       return {
         ...prev,
-        [normalizedAgentId]: current.filter(id => id !== normalizedReportId),
+        [normalizedAgentId]: removeDismissedReleaseGateReportId(current, normalizedReportId),
       };
     });
   }, [normalizedAgentId]);
@@ -320,19 +323,10 @@ export function useReleaseGateValidateRun(options: {
           offset: 0,
         });
         if (cancelled) return;
-        const seenReportIds = new Set<string>();
-        const reportsToHydrate = (history.items ?? [])
-          .map(item => ({
-            reportId: String(item.report_id || "").trim(),
-            createdAt: item.session_created_at ?? item.created_at ?? null,
-            sessionResult: item.session_result ?? null,
-          }))
-          .filter(item => {
-            if (!item.reportId || seenReportIds.has(item.reportId)) return false;
-            seenReportIds.add(item.reportId);
-            return true;
-          })
-          .slice(0, RESULTS_REHYDRATE_LIMIT);
+        const reportsToHydrate = buildReleaseGateReportHydrationTargets(
+          history.items ?? [],
+          RESULTS_REHYDRATE_LIMIT
+        );
         if (reportsToHydrate.length === 0) return;
 
         const hydratedEntries = (
@@ -473,7 +467,7 @@ export function useReleaseGateValidateRun(options: {
             if (!current.includes(reportId)) return prev;
             return {
               ...prev,
-              [ownerAgentId]: current.filter(id => id !== reportId),
+              [ownerAgentId]: removeDismissedReleaseGateReportId(current, reportId),
             };
           });
         }

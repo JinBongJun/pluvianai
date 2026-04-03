@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildReleaseGateReportHydrationTargets,
   mapExportedReportToCompletedReleaseGateEntry,
   mapHistoryItemToCompletedReleaseGateEntry,
   mergeCompletedReleaseGateEntries,
+  removeCompletedReleaseGateEntry,
+  removeDismissedReleaseGateReportId,
   type CompletedReleaseGateResultEntry,
 } from "./releaseGateResultHydration";
 
@@ -95,5 +98,64 @@ describe("useReleaseGateValidateRun helpers", () => {
       },
     });
     expect(entry?.completedAtMs).toBe(Date.parse("2026-04-04T02:03:04.000Z"));
+  });
+
+  it("removes a completed entry and dismissed id by report id", () => {
+    const entries: CompletedReleaseGateResultEntry[] = [
+      {
+        reportId: "rep-1",
+        result: { report_id: "rep-1", pass: true } as any,
+        completedAtMs: 100,
+      },
+      {
+        reportId: "rep-2",
+        result: { report_id: "rep-2", pass: false } as any,
+        completedAtMs: 200,
+      },
+    ];
+
+    expect(removeCompletedReleaseGateEntry(entries, "rep-1").map(entry => entry.reportId)).toEqual([
+      "rep-2",
+    ]);
+    expect(removeDismissedReleaseGateReportId(["rep-1", "rep-2"], "rep-2")).toEqual(["rep-1"]);
+  });
+
+  it("builds unique hydration targets in history order and honors limit", () => {
+    const targets = buildReleaseGateReportHydrationTargets(
+      [
+        {
+          report_id: "rep-1",
+          created_at: "2026-04-04T02:03:04.000Z",
+          session_created_at: "2026-04-04T02:03:04.000Z",
+          session_result: { report_id: "rep-1", pass: true } as any,
+        },
+        {
+          report_id: "rep-1",
+          created_at: "2026-04-04T01:03:04.000Z",
+          session_created_at: "2026-04-04T01:03:04.000Z",
+          session_result: { report_id: "rep-1", pass: false } as any,
+        },
+        {
+          report_id: "rep-2",
+          created_at: "2026-04-03T02:03:04.000Z",
+          session_created_at: "2026-04-03T02:03:04.000Z",
+          session_result: null,
+        },
+      ] as any,
+      2
+    );
+
+    expect(targets).toEqual([
+      {
+        reportId: "rep-1",
+        createdAt: "2026-04-04T02:03:04.000Z",
+        sessionResult: { report_id: "rep-1", pass: true },
+      },
+      {
+        reportId: "rep-2",
+        createdAt: "2026-04-03T02:03:04.000Z",
+        sessionResult: null,
+      },
+    ]);
   });
 });
