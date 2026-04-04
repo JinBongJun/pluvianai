@@ -9,6 +9,9 @@
  *
  * Multi-agent: see "Live View multi-agent canvas" — seeds several agents via `Promise.all` and asserts
  * every `lv-node-*` is present before/after refresh (stress for concurrent snapshot ingestion + canvas).
+ *
+ * Node testids use `seedToolSnapshot().snapshotAgentId` (persisted agent id), not the seed request
+ * `agentId`, because async/queued ingest may keep signature-based ids (`build_node_key`).
  */
 import { expect, request as playwrightRequest, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -60,27 +63,30 @@ test.describe.serial("Live View E2E", () => {
     const ts = Date.now();
     const agentA = `pw-lv-a-${ts}`;
     const agentB = `pw-lv-b-${ts}`;
-    await seedToolSnapshot(api, token, projectId, { agentId: agentA, promptPrefix: "PW-LV-A" });
-    await seedToolSnapshot(api, token, projectId, { agentId: agentB, promptPrefix: "PW-LV-B" });
+    const seededA = await seedToolSnapshot(api, token, projectId, { agentId: agentA, promptPrefix: "PW-LV-A" });
+    const seededB = await seedToolSnapshot(api, token, projectId, { agentId: agentB, promptPrefix: "PW-LV-B" });
+    // Live View node id matches persisted snapshot agent_id (may differ from requested id when ingest is async / signature-based).
+    const nodeIdA = seededA.snapshotAgentId;
+    const nodeIdB = seededB.snapshotAgentId;
 
     await loginWithSessionCookies(page, session);
     const liveViewUrl = `/organizations/${orgId}/projects/${projectId}/live-view`;
     await page.goto(liveViewUrl, { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Loading Live View")).toBeHidden({ timeout: 60_000 });
 
-    const nodeA = page.getByTestId(`lv-node-${agentA}`);
-    const nodeB = page.getByTestId(`lv-node-${agentB}`);
+    const nodeA = page.getByTestId(`lv-node-${nodeIdA}`);
+    const nodeB = page.getByTestId(`lv-node-${nodeIdB}`);
     await expect(nodeA).toBeVisible({ timeout: 45_000 });
     await expect(nodeB).toBeVisible({ timeout: 45_000 });
 
     await nodeA.click();
-    await expect(page.locator("h2").filter({ hasText: agentA })).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("h2").filter({ hasText: nodeIdA })).toBeVisible({ timeout: 15_000 });
     await expect(nodeB).toHaveClass(/opacity-40/);
 
     await page.getByTestId("laboratory-refresh-button").click();
     await expect(nodeA).toBeVisible({ timeout: 45_000 });
     await expect(nodeB).toBeVisible({ timeout: 45_000 });
-    await expect(page.locator("h2").filter({ hasText: agentA })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("h2").filter({ hasText: nodeIdA })).toBeVisible({ timeout: 20_000 });
     await expect(nodeB).toHaveClass(/opacity-40/);
 
     if (pageErrors.length) {
@@ -148,21 +154,22 @@ test.describe.serial("Live View E2E", () => {
     const ts = Date.now();
     const agentA = `pw-lv-drag-${ts}`;
     const agentB = `pw-lv-drag2-${ts}`;
-    await seedToolSnapshot(api, token, projectId, { agentId: agentA, promptPrefix: "PW-LV-DRAG-A" });
+    const seededA = await seedToolSnapshot(api, token, projectId, { agentId: agentA, promptPrefix: "PW-LV-DRAG-A" });
     await seedToolSnapshot(api, token, projectId, { agentId: agentB, promptPrefix: "PW-LV-DRAG-B" });
+    const nodeIdA = seededA.snapshotAgentId;
 
     await loginWithSessionCookies(page, session);
     const liveViewUrl = `/organizations/${orgId}/projects/${projectId}/live-view`;
     await page.goto(liveViewUrl, { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Loading Live View")).toBeHidden({ timeout: 60_000 });
 
-    const nodeA = page.getByTestId(`lv-node-${agentA}`);
+    const nodeA = page.getByTestId(`lv-node-${nodeIdA}`);
     await expect(nodeA).toBeVisible({ timeout: 45_000 });
     await nodeA.click();
-    await expect(page.locator("h2").filter({ hasText: agentA })).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("h2").filter({ hasText: nodeIdA })).toBeVisible({ timeout: 15_000 });
 
     await page.getByTestId("live-view-auto-layout-btn").click();
-    await expect(page.locator("h2").filter({ hasText: agentA })).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("h2").filter({ hasText: nodeIdA })).toBeVisible({ timeout: 15_000 });
 
     const box = await nodeA.boundingBox();
     expect(box, "node A box").toBeTruthy();
@@ -175,7 +182,7 @@ test.describe.serial("Live View E2E", () => {
     await page.waitForTimeout(220);
 
     await page.mouse.click(startX + 5, startY + 5);
-    await expect(page.locator("h2").filter({ hasText: agentA })).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("h2").filter({ hasText: nodeIdA })).toBeVisible({ timeout: 10_000 });
 
     if (pageErrors.length) {
       await testInfo.attach("pageerrors-drag.txt", {
@@ -206,7 +213,7 @@ test.describe.serial("Live View E2E", () => {
       (_, i) => `pw-lv-multi-${ts}-${i}`
     );
 
-    await Promise.all(
+    const seeded = await Promise.all(
       agentIds.map((agentId, i) =>
         seedToolSnapshot(api, token, projectId, {
           agentId,
@@ -215,18 +222,19 @@ test.describe.serial("Live View E2E", () => {
         })
       )
     );
+    const nodeIds = seeded.map(s => s.snapshotAgentId);
 
     await loginWithSessionCookies(page, session);
     const liveViewUrl = `/organizations/${orgId}/projects/${projectId}/live-view`;
     await page.goto(liveViewUrl, { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Loading Live View")).toBeHidden({ timeout: 90_000 });
 
-    for (const id of agentIds) {
+    for (const id of nodeIds) {
       await expect(page.getByTestId(`lv-node-${id}`)).toBeVisible({ timeout: 90_000 });
     }
 
     await page.getByTestId("laboratory-refresh-button").click();
-    for (const id of agentIds) {
+    for (const id of nodeIds) {
       await expect(page.getByTestId(`lv-node-${id}`)).toBeVisible({ timeout: 90_000 });
     }
 
