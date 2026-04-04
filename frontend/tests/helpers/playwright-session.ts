@@ -30,6 +30,8 @@ export type SeedContext = {
 export type SeedSnapshotOptions = {
   agentId?: string;
   promptPrefix?: string;
+  /** When set, used as `trace_id` so parallel `seedToolSnapshot` calls never collide. */
+  traceId?: string;
 };
 
 async function waitForSnapshotMeta(
@@ -251,8 +253,8 @@ export async function seedToolSnapshot(
   projectId: number,
   options: SeedSnapshotOptions = {}
 ): Promise<SeedContext> {
-  const traceId = `pw-tool-flow-${Date.now()}`;
-  const promptText = `${options.promptPrefix || "PWTOOL-E2E"}-${Date.now()}`;
+  const traceId = options.traceId ?? `pw-tool-flow-${Date.now()}`;
+  const promptText = `${options.promptPrefix || "PWTOOL-E2E"}-${traceId}`;
 
   await expectOkWithRetry(
     "create snapshot",

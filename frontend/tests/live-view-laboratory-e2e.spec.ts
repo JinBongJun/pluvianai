@@ -6,6 +6,9 @@
  *
  * DoD (operational): repeat the same CI job N times or use `npx playwright test --repeat-each=20`
  * for soak; flake rate is tracked outside this file (see docs/adr/ADR-0001-release-gate-hydration-contract.md).
+ *
+ * Multi-agent: see "Live View multi-agent canvas" — seeds several agents via `Promise.all` and asserts
+ * every `lv-node-*` is present before/after refresh (stress for concurrent snapshot ingestion + canvas).
  */
 import { expect, request as playwrightRequest, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -180,5 +183,62 @@ test.describe("Live View laboratory refresh & selection", () => {
       await attachFailureDiagnostics(page, testInfo);
     }
     expect(pageErrors).toEqual([]);
+  });
+});
+
+const MULTI_AGENT_NODE_COUNT = 6;
+
+test.describe("Live View multi-agent canvas", () => {
+  test.describe.configure({ mode: "serial" });
+
+  test("parallel seed: all agent nodes visible; refresh keeps every node", async ({ page }, testInfo) => {
+    test.setTimeout(300_000);
+    requireCredentials();
+
+    const pageErrors: string[] = [];
+    page.on("pageerror", err => pageErrors.push(String(err?.message || err)));
+
+    const api = await playwrightRequest.newContext({ baseURL: API_BASE_URL });
+    const session = await loginToBackend(api);
+    const token = session.accessToken;
+    const { orgId, projectId } = await ensureOrgAndProject(api, token);
+    const ts = Date.now();
+    const agentIds = Array.from(
+      { length: MULTI_AGENT_NODE_COUNT },
+      (_, i) => `pw-lv-multi-${ts}-${i}`
+    );
+
+    await Promise.all(
+      agentIds.map((agentId, i) =>
+        seedToolSnapshot(api, token, projectId, {
+          agentId,
+          promptPrefix: `PW-LV-MULTI-${i}`,
+          traceId: `pw-tool-flow-multi-${ts}-${i}-${Math.random().toString(36).slice(2, 10)}`,
+        })
+      )
+    );
+
+    await loginWithSessionCookies(page, session);
+    const liveViewUrl = `/organizations/${orgId}/projects/${projectId}/live-view`;
+    await page.goto(liveViewUrl, { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("Loading Live View")).toBeHidden({ timeout: 90_000 });
+
+    for (const id of agentIds) {
+      await expect(page.getByTestId(`lv-node-${id}`)).toBeVisible({ timeout: 90_000 });
+    }
+
+    await page.getByTestId("laboratory-refresh-button").click();
+    for (const id of agentIds) {
+      await expect(page.getByTestId(`lv-node-${id}`)).toBeVisible({ timeout: 90_000 });
+    }
+
+    if (pageErrors.length) {
+      await testInfo.attach("pageerrors-multi.txt", {
+        body: pageErrors.join("\n"),
+        contentType: "text/plain",
+      });
+      await attachFailureDiagnostics(page, testInfo);
+    }
+    expect(pageErrors, "unexpected page errors").toEqual([]);
   });
 });
