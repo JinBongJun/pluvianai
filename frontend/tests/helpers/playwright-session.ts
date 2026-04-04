@@ -373,34 +373,56 @@ export async function createDataset(
   return (await response.json()) as { id: string; label?: string | null };
 }
 
+function cookieSameSiteAndSecureForOrigin(originBaseUrl: string): {
+  sameSite: "Lax" | "None";
+  secure: boolean;
+} {
+  try {
+    const u = new URL(originBaseUrl);
+    if (u.protocol === "https:") {
+      // Localhost UI → remote API is cross-site; Lax cookies are not sent on XHR to another site.
+      return { sameSite: "None", secure: true };
+    }
+  } catch {
+    // ignore
+  }
+  return { sameSite: "Lax", secure: false };
+}
+
 export async function loginWithSessionCookies(
   page: Page,
   session: { accessToken: string; refreshToken: string }
 ) {
   const csrfToken = `pw-csrf-${Date.now()}`;
-  const buildCookiesForUrl = (url: string) => [
-    {
-      name: "access_token",
-      value: session.accessToken,
-      url,
-      httpOnly: true,
-      sameSite: "Lax" as const,
-    },
-    {
-      name: "refresh_token",
-      value: session.refreshToken,
-      url,
-      httpOnly: true,
-      sameSite: "Lax" as const,
-    },
-    {
-      name: "csrf_token",
-      value: csrfToken,
-      url,
-      httpOnly: false,
-      sameSite: "Lax" as const,
-    },
-  ];
+  const buildCookiesForUrl = (url: string) => {
+    const { sameSite, secure } = cookieSameSiteAndSecureForOrigin(url);
+    return [
+      {
+        name: "access_token",
+        value: session.accessToken,
+        url,
+        httpOnly: true,
+        sameSite,
+        secure,
+      },
+      {
+        name: "refresh_token",
+        value: session.refreshToken,
+        url,
+        httpOnly: true,
+        sameSite,
+        secure,
+      },
+      {
+        name: "csrf_token",
+        value: csrfToken,
+        url,
+        httpOnly: false,
+        sameSite,
+        secure,
+      },
+    ];
+  };
   const cookieUrls = Array.from(
     new Set(
       [PLAYWRIGHT_BASE_URL, "http://localhost:3000", "http://localhost:8000", API_BASE_URL].map(
