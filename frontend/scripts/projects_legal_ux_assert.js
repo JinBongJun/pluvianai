@@ -288,25 +288,26 @@ async function checkProjectsAndRoleUx(baseUrl, backendUrl, email, password) {
       menuClosed && noAlertsStillSelected
     );
 
-    // L-5: "0 ALERTS" label in grid and list
-    const gridZeroAlertsText = page.getByText("0 ALERTS");
-    const gridZeroCount = await gridZeroAlertsText.count();
+    // L-5: project ID visible in grid (ID badge) and list (Project ID column)
+    await page.waitForTimeout(400);
+    const gridIdBadgeCount = await page.getByText(/^ID:$/i).count();
     const listToggle = page.locator("button", { has: page.locator("svg.lucide-list") }).first();
     await listToggle.click();
-    await page.getByRole("columnheader", { name: /Active Alerts/i }).waitFor({
+    await page.getByRole("columnheader", { name: /Project ID/i }).waitFor({
       state: "visible",
       timeout: 7000,
     });
-    const listZeroCount = await page.getByText("0 ALERTS").count();
+    const listProjectIdHeaderVisible = await page.getByRole("columnheader", { name: /Project ID/i }).isVisible();
     const anyAlertsLabel = await page.getByText(/ALERTS/i).count();
-    if (gridZeroCount === 0 && listZeroCount === 0) {
+    if (gridIdBadgeCount === 0) {
       out.checks.l5_alert_label_consistency_grid_and_list = true;
       out.details.skipped.l5_alert_label_consistency_grid_and_list =
-        "No visible 0-alert rows/cards for this account scope (cannot assert label format deterministically)";
+        "No project cards in grid (cannot assert ID badge count)";
     } else {
-      out.checks.l5_alert_label_consistency_grid_and_list = gridZeroCount >= 1 && listZeroCount >= 1;
+      out.checks.l5_alert_label_consistency_grid_and_list =
+        gridIdBadgeCount >= 1 && listProjectIdHeaderVisible;
     }
-    out.details = { ...out.details, gridZeroCount, listZeroCount, anyAlertsLabel };
+    out.details = { ...out.details, gridIdBadgeCount, listProjectIdHeaderVisible, anyAlertsLabel };
 
     // M-1: Team role guide
     await page.goto(`${baseUrl}/organizations/${orgId}/team`, {

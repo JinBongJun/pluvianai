@@ -395,7 +395,12 @@ function cookieSameSiteAndSecureForOrigin(originBaseUrl: string): {
   return { sameSite: "Lax", secure: false };
 }
 
-export async function loginWithSessionCookies(
+/**
+ * Mirrors API tokens onto the Playwright browser origin(s). Required when `NEXT_PUBLIC_API_URL`
+ * points at a remote host: POST /auth/login only sets cookies on the API domain, while
+ * `/api/auth/status` reads `access_token` on the app origin (localhost in E2E).
+ */
+export async function addSessionCookiesToBrowserContext(
   page: Page,
   session: { accessToken: string; refreshToken: string }
 ) {
@@ -443,6 +448,13 @@ export async function loginWithSessionCookies(
     )
   );
   await page.context().addCookies(cookieUrls.flatMap(buildCookiesForUrl));
+}
+
+export async function loginWithSessionCookies(
+  page: Page,
+  session: { accessToken: string; refreshToken: string }
+) {
+  await addSessionCookiesToBrowserContext(page, session);
   await page.goto("/organizations", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/organizations/, { timeout: 20000 });
 }

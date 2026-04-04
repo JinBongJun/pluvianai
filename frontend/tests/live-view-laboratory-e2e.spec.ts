@@ -17,6 +17,7 @@
 import { expect, request as playwrightRequest, test, type Page, type TestInfo } from "@playwright/test";
 
 import {
+  addSessionCookiesToBrowserContext,
   API_BASE_URL,
   ensureOrgAndProject,
   LOGIN_EMAIL,
@@ -44,12 +45,14 @@ async function attachFailureDiagnostics(page: Page, testInfo: TestInfo) {
 /** One serial chain: parallel Playwright workers were each logging in and invalidating refresh tokens. */
 const MULTI_AGENT_NODE_COUNT = 6;
 
-test.describe.serial("Live View E2E", () => {
+test.describe("Live View E2E", () => {
+  /** Serial: shared refresh-token semantics; 300s for slow remote snapshot ingest. */
+  test.describe.configure({ mode: "serial", timeout: 300_000 });
+
   test.describe("Live View laboratory refresh & selection", () => {
   test("refresh keeps selected agent when still present; fit runs without errors", async ({
     page,
   }, testInfo) => {
-    test.setTimeout(180_000);
     requireCredentials();
 
     const pageErrors: string[] = [];
@@ -112,7 +115,6 @@ test.describe.serial("Live View E2E", () => {
   test("session expiry redirects to login; can return to Live View after sign-in", async ({
     page,
   }, testInfo) => {
-    test.setTimeout(180_000);
     requireCredentials();
 
     const pageErrors: string[] = [];
@@ -122,7 +124,12 @@ test.describe.serial("Live View E2E", () => {
     const session = await loginToBackend(api);
     const token = session.accessToken;
     const { orgId, projectId } = await ensureOrgAndProject(api, token);
-    await seedToolSnapshot(api, token, projectId, { agentId: `pw-lv-reauth-${Date.now()}`, promptPrefix: "PW-LV-REAUTH" });
+    const reauthSeed = await seedToolSnapshot(api, token, projectId, {
+      agentId: `pw-lv-reauth-${Date.now()}`,
+      promptPrefix: "PW-LV-REAUTH",
+      temperature: 0.37,
+    });
+    const reauthNodeId = reauthSeed.snapshotAgentId;
 
     await loginWithSessionCookies(page, session);
     const liveViewUrl = `/organizations/${orgId}/projects/${projectId}/live-view`;
@@ -135,11 +142,29 @@ test.describe.serial("Live View E2E", () => {
 
     await page.locator("#email-address").fill(LOGIN_EMAIL!);
     await page.locator("#password").fill(LOGIN_PASSWORD!);
+    const loginResponsePromise = page.waitForResponse(
+      response =>
+        response.url().includes("/api/v1/auth/login") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+      { timeout: 45_000 }
+    );
     await page.getByRole("button", { name: "Sign in" }).first().click();
-
+    const loginHttp = await loginResponsePromise;
+    const loginJson = (await loginHttp.json()) as { access_token?: string; refresh_token?: string };
+    expect(loginJson.access_token, "password login must return access_token").toBeTruthy();
+    expect(loginJson.refresh_token, "password login must return refresh_token").toBeTruthy();
+    // Remote API login does not set cookies on the Next.js origin; mirror tokens so Live View can load agents.
+    await addSessionCookiesToBrowserContext(page, {
+      accessToken: loginJson.access_token!,
+      refreshToken: loginJson.refresh_token!,
+    });
+    // Always navigate after injecting cookies: the login page may have already redirected to live view
+    // without these cookies (then back to /login), in which case nothing would leave /login again.
     await page.goto(liveViewUrl, { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Loading Live View")).toBeHidden({ timeout: 60_000 });
-    await expect(page.locator("[data-testid^='lv-node-']").first()).toBeVisible({ timeout: 45_000 });
+    await page.getByTestId("laboratory-refresh-button").click();
+    await expect(page.getByTestId(`lv-node-${reauthNodeId}`)).toBeVisible({ timeout: 60_000 });
 
     if (pageErrors.length) {
       await testInfo.attach("pageerrors-reauth.txt", {
@@ -151,7 +176,6 @@ test.describe.serial("Live View E2E", () => {
   });
 
   test("auto-layout then drag does not drop selection (no ghost click)", async ({ page }, testInfo) => {
-    test.setTimeout(180_000);
     requireCredentials();
 
     const pageErrors: string[] = [];
@@ -215,7 +239,6 @@ test.describe.serial("Live View E2E", () => {
 
   test.describe("Live View multi-agent canvas", () => {
   test("parallel seed: all agent nodes visible; refresh keeps every node", async ({ page }, testInfo) => {
-    test.setTimeout(300_000);
     requireCredentials();
 
     const pageErrors: string[] = [];
