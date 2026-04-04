@@ -37,9 +37,11 @@ async function attachFailureDiagnostics(page: Page, testInfo: TestInfo) {
   }
 }
 
-test.describe("Live View laboratory refresh & selection", () => {
-  test.describe.configure({ mode: "serial" });
+/** One serial chain: parallel Playwright workers were each logging in and invalidating refresh tokens. */
+const MULTI_AGENT_NODE_COUNT = 6;
 
+test.describe.serial("Live View E2E", () => {
+  test.describe("Live View laboratory refresh & selection", () => {
   test("refresh keeps selected agent when still present; fit runs without errors", async ({
     page,
   }, testInfo) => {
@@ -184,13 +186,9 @@ test.describe("Live View laboratory refresh & selection", () => {
     }
     expect(pageErrors).toEqual([]);
   });
-});
+  });
 
-const MULTI_AGENT_NODE_COUNT = 6;
-
-test.describe("Live View multi-agent canvas", () => {
-  test.describe.configure({ mode: "serial" });
-
+  test.describe("Live View multi-agent canvas", () => {
   test("parallel seed: all agent nodes visible; refresh keeps every node", async ({ page }, testInfo) => {
     test.setTimeout(300_000);
     requireCredentials();
@@ -240,5 +238,6 @@ test.describe("Live View multi-agent canvas", () => {
       await attachFailureDiagnostics(page, testInfo);
     }
     expect(pageErrors, "unexpected page errors").toEqual([]);
+  });
   });
 });

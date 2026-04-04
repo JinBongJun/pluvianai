@@ -34,13 +34,15 @@ export type SeedSnapshotOptions = {
   traceId?: string;
 };
 
+/** Poll list until trace appears (Redis/async ingest can take many seconds on production). */
 async function waitForSnapshotMeta(
   api: APIRequestContext,
   token: string,
   projectId: number,
   traceId: string
 ): Promise<{ snapshotId: number; agentId: string }> {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  const maxAttempts = 100;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const listResponse = await authedJson(
       api,
       "GET",
@@ -57,7 +59,7 @@ async function waitForSnapshotMeta(
         return { snapshotId: Number(match.id), agentId: String(match.agent_id || "") };
       }
     }
-    await new Promise(resolve => setTimeout(resolve, attempt < 4 ? 500 : 1000));
+    await new Promise(resolve => setTimeout(resolve, attempt < 8 ? 500 : 1000));
   }
   throw new Error(`Snapshot was not created for trace ${traceId}`);
 }
@@ -256,7 +258,7 @@ export async function seedToolSnapshot(
   const traceId = options.traceId ?? `pw-tool-flow-${Date.now()}`;
   const promptText = `${options.promptPrefix || "PWTOOL-E2E"}-${traceId}`;
 
-  await expectOkWithRetry(
+  const createResponse = await expectOkWithRetry(
     "create snapshot",
     () =>
       authedJson(api, "POST", `/api/v1/projects/${projectId}/snapshots`, token, {
@@ -313,8 +315,14 @@ export async function seedToolSnapshot(
     4
   );
 
-  const snapshotMeta = await waitForSnapshotMeta(api, token, projectId, traceId);
-  const snapshotId = snapshotMeta.snapshotId;
+  const createData = (await createResponse.json()) as { id?: number; status?: string };
+  let snapshotId: number;
+  if (Number.isFinite(Number(createData?.id))) {
+    snapshotId = Number(createData.id);
+  } else {
+    const snapshotMeta = await waitForSnapshotMeta(api, token, projectId, traceId);
+    snapshotId = snapshotMeta.snapshotId;
+  }
 
   await expectOkWithRetry(
     "validate snapshot behavior",
