@@ -427,5 +427,5 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     cache_service.redis_client.expire(client_id, 60)
                 return current_count <= self.requests_per_minute
             except Exception:
-                return _check_rate_limit_memory(client_id)
+                return _check_rate_limit_memory(client_id, self.requests_per_minute)
         return _check_rate_limit_memory(client_id, self.requests_per_minute)
