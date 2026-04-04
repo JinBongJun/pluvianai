@@ -12,6 +12,7 @@
  *
  * Node testids use `seedToolSnapshot().snapshotAgentId` (persisted agent id), not the seed request
  * `agentId`, because async/queued ingest may keep signature-based ids (`build_node_key`).
+ * For multiple nodes, pass distinct `temperature` per seed — `build_node_key` ignores user message text.
  */
 import { expect, request as playwrightRequest, test, type Page, type TestInfo } from "@playwright/test";
 
@@ -63,11 +64,20 @@ test.describe.serial("Live View E2E", () => {
     const ts = Date.now();
     const agentA = `pw-lv-a-${ts}`;
     const agentB = `pw-lv-b-${ts}`;
-    const seededA = await seedToolSnapshot(api, token, projectId, { agentId: agentA, promptPrefix: "PW-LV-A" });
-    const seededB = await seedToolSnapshot(api, token, projectId, { agentId: agentB, promptPrefix: "PW-LV-B" });
+    const seededA = await seedToolSnapshot(api, token, projectId, {
+      agentId: agentA,
+      promptPrefix: "PW-LV-A",
+      temperature: 0.41,
+    });
+    const seededB = await seedToolSnapshot(api, token, projectId, {
+      agentId: agentB,
+      promptPrefix: "PW-LV-B",
+      temperature: 0.42,
+    });
     // Live View node id matches persisted snapshot agent_id (may differ from requested id when ingest is async / signature-based).
     const nodeIdA = seededA.snapshotAgentId;
     const nodeIdB = seededB.snapshotAgentId;
+    expect(nodeIdA, "two seeds must map to two distinct Live View nodes (see build_node_key)").not.toBe(nodeIdB);
 
     await loginWithSessionCookies(page, session);
     const liveViewUrl = `/organizations/${orgId}/projects/${projectId}/live-view`;
@@ -81,13 +91,13 @@ test.describe.serial("Live View E2E", () => {
 
     await nodeA.click();
     await expect(page.locator("h2").filter({ hasText: nodeIdA })).toBeVisible({ timeout: 15_000 });
-    await expect(nodeB).toHaveClass(/opacity-40/);
+    await expect(nodeB).toHaveClass(/opacity-40/, { timeout: 15_000 });
 
     await page.getByTestId("laboratory-refresh-button").click();
     await expect(nodeA).toBeVisible({ timeout: 45_000 });
     await expect(nodeB).toBeVisible({ timeout: 45_000 });
     await expect(page.locator("h2").filter({ hasText: nodeIdA })).toBeVisible({ timeout: 20_000 });
-    await expect(nodeB).toHaveClass(/opacity-40/);
+    await expect(nodeB).toHaveClass(/opacity-40/, { timeout: 15_000 });
 
     if (pageErrors.length) {
       await testInfo.attach("pageerrors.txt", {
@@ -154,8 +164,16 @@ test.describe.serial("Live View E2E", () => {
     const ts = Date.now();
     const agentA = `pw-lv-drag-${ts}`;
     const agentB = `pw-lv-drag2-${ts}`;
-    const seededA = await seedToolSnapshot(api, token, projectId, { agentId: agentA, promptPrefix: "PW-LV-DRAG-A" });
-    await seedToolSnapshot(api, token, projectId, { agentId: agentB, promptPrefix: "PW-LV-DRAG-B" });
+    const seededA = await seedToolSnapshot(api, token, projectId, {
+      agentId: agentA,
+      promptPrefix: "PW-LV-DRAG-A",
+      temperature: 0.51,
+    });
+    await seedToolSnapshot(api, token, projectId, {
+      agentId: agentB,
+      promptPrefix: "PW-LV-DRAG-B",
+      temperature: 0.52,
+    });
     const nodeIdA = seededA.snapshotAgentId;
 
     await loginWithSessionCookies(page, session);
@@ -219,6 +237,7 @@ test.describe.serial("Live View E2E", () => {
           agentId,
           promptPrefix: `PW-LV-MULTI-${i}`,
           traceId: `pw-tool-flow-multi-${ts}-${i}-${Math.random().toString(36).slice(2, 10)}`,
+          temperature: 0.6 + i * 0.01,
         })
       )
     );

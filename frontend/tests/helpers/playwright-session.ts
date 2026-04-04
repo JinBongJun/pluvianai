@@ -32,6 +32,11 @@ export type SeedSnapshotOptions = {
   promptPrefix?: string;
   /** When set, used as `trace_id` so parallel `seedToolSnapshot` calls never collide. */
   traceId?: string;
+  /**
+   * Included in snapshot payload so `build_node_key` differs across seeds (user message is not part of the key).
+   * Use distinct values when you need multiple Live View nodes for the same provider/model.
+   */
+  temperature?: number;
 };
 
 /** Poll list until trace appears (Redis/async ingest can take many seconds on production). */
@@ -268,6 +273,7 @@ export async function seedToolSnapshot(
         model: "gpt-4o-mini",
         status_code: 200,
         payload: {
+          ...(typeof options.temperature === "number" ? { temperature: options.temperature } : {}),
           messages: [{ role: "user", content: promptText }],
           response: {
             id: `resp-${traceId}`,
