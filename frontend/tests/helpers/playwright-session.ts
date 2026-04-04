@@ -30,15 +30,24 @@ export type SeedContext = {
 export type SeedSnapshotOptions = {
   agentId?: string;
   promptPrefix?: string;
+  /** When set, used as `trace_id` so parallel `seedToolSnapshot` calls never collide. */
+  traceId?: string;
+  /**
+   * Included in snapshot payload so `build_node_key` differs across seeds (user message is not part of the key).
+   * Use distinct values when you need multiple Live View nodes for the same provider/model.
+   */
+  temperature?: number;
 };
 
+/** Poll list until trace appears (Redis/async ingest can take many seconds on production). */
 async function waitForSnapshotMeta(
   api: APIRequestContext,
   token: string,
   projectId: number,
   traceId: string
 ): Promise<{ snapshotId: number; agentId: string }> {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  const maxAttempts = 100;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const listResponse = await authedJson(
       api,
       "GET",
@@ -55,7 +64,7 @@ async function waitForSnapshotMeta(
         return { snapshotId: Number(match.id), agentId: String(match.agent_id || "") };
       }
     }
-    await new Promise(resolve => setTimeout(resolve, attempt < 4 ? 500 : 1000));
+    await new Promise(resolve => setTimeout(resolve, attempt < 8 ? 500 : 1000));
   }
   throw new Error(`Snapshot was not created for trace ${traceId}`);
 }
@@ -251,10 +260,10 @@ export async function seedToolSnapshot(
   projectId: number,
   options: SeedSnapshotOptions = {}
 ): Promise<SeedContext> {
-  const traceId = `pw-tool-flow-${Date.now()}`;
-  const promptText = `${options.promptPrefix || "PWTOOL-E2E"}-${Date.now()}`;
+  const traceId = options.traceId ?? `pw-tool-flow-${Date.now()}`;
+  const promptText = `${options.promptPrefix || "PWTOOL-E2E"}-${traceId}`;
 
-  await expectOkWithRetry(
+  const createResponse = await expectOkWithRetry(
     "create snapshot",
     () =>
       authedJson(api, "POST", `/api/v1/projects/${projectId}/snapshots`, token, {
@@ -264,6 +273,7 @@ export async function seedToolSnapshot(
         model: "gpt-4o-mini",
         status_code: 200,
         payload: {
+          ...(typeof options.temperature === "number" ? { temperature: options.temperature } : {}),
           messages: [{ role: "user", content: promptText }],
           response: {
             id: `resp-${traceId}`,
@@ -311,8 +321,14 @@ export async function seedToolSnapshot(
     4
   );
 
-  const snapshotMeta = await waitForSnapshotMeta(api, token, projectId, traceId);
-  const snapshotId = snapshotMeta.snapshotId;
+  const createData = (await createResponse.json()) as { id?: number; status?: string };
+  let snapshotId: number;
+  if (Number.isFinite(Number(createData?.id))) {
+    snapshotId = Number(createData.id);
+  } else {
+    const snapshotMeta = await waitForSnapshotMeta(api, token, projectId, traceId);
+    snapshotId = snapshotMeta.snapshotId;
+  }
 
   await expectOkWithRetry(
     "validate snapshot behavior",
@@ -363,34 +379,56 @@ export async function createDataset(
   return (await response.json()) as { id: string; label?: string | null };
 }
 
+function cookieSameSiteAndSecureForOrigin(originBaseUrl: string): {
+  sameSite: "Lax" | "None";
+  secure: boolean;
+} {
+  try {
+    const u = new URL(originBaseUrl);
+    if (u.protocol === "https:") {
+      // Localhost UI → remote API is cross-site; Lax cookies are not sent on XHR to another site.
+      return { sameSite: "None", secure: true };
+    }
+  } catch {
+    // ignore
+  }
+  return { sameSite: "Lax", secure: false };
+}
+
 export async function loginWithSessionCookies(
   page: Page,
   session: { accessToken: string; refreshToken: string }
 ) {
   const csrfToken = `pw-csrf-${Date.now()}`;
-  const buildCookiesForUrl = (url: string) => [
-    {
-      name: "access_token",
-      value: session.accessToken,
-      url,
-      httpOnly: true,
-      sameSite: "Lax" as const,
-    },
-    {
-      name: "refresh_token",
-      value: session.refreshToken,
-      url,
-      httpOnly: true,
-      sameSite: "Lax" as const,
-    },
-    {
-      name: "csrf_token",
-      value: csrfToken,
-      url,
-      httpOnly: false,
-      sameSite: "Lax" as const,
-    },
-  ];
+  const buildCookiesForUrl = (url: string) => {
+    const { sameSite, secure } = cookieSameSiteAndSecureForOrigin(url);
+    return [
+      {
+        name: "access_token",
+        value: session.accessToken,
+        url,
+        httpOnly: true,
+        sameSite,
+        secure,
+      },
+      {
+        name: "refresh_token",
+        value: session.refreshToken,
+        url,
+        httpOnly: true,
+        sameSite,
+        secure,
+      },
+      {
+        name: "csrf_token",
+        value: csrfToken,
+        url,
+        httpOnly: false,
+        sameSite,
+        secure,
+      },
+    ];
+  };
   const cookieUrls = Array.from(
     new Set(
       [PLAYWRIGHT_BASE_URL, "http://localhost:3000", "http://localhost:8000", API_BASE_URL].map(
