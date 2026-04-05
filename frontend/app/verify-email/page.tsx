@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { authAPI } from "@/lib/api";
@@ -8,6 +9,7 @@ import { authAPI } from "@/lib/api";
 type VerifyState = "loading" | "success" | "error";
 
 export default function VerifyEmailPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
   const [state, setState] = useState<VerifyState>("loading");
@@ -21,7 +23,24 @@ export default function VerifyEmailPage() {
         return;
       }
       try {
-        await authAPI.verifyEmail(token);
+        const result = await authAPI.verifyEmail(token);
+        if (result?.purpose === "signup") {
+          setState("loading");
+          setMessage("Email verified. Preparing your workspace...");
+          try {
+            const workspace = await authAPI.getDefaultWorkspace();
+            if (workspace?.path?.startsWith("/")) {
+              router.replace(workspace.path);
+              return;
+            }
+          } catch {
+            router.replace("/organizations");
+            return;
+          }
+          router.replace("/organizations");
+          return;
+        }
+
         setState("success");
         setMessage("Your email has been verified. You can sign in now.");
       } catch (err: any) {
@@ -35,7 +54,7 @@ export default function VerifyEmailPage() {
     };
 
     void run();
-  }, [token]);
+  }, [router, token]);
 
   return (
     <main className="min-h-screen bg-[#030303] text-white flex items-center justify-center px-6">
@@ -44,7 +63,11 @@ export default function VerifyEmailPage() {
           Email Verification
         </p>
         <h1 className="mt-3 text-3xl font-black tracking-tight">
-          {state === "loading" ? "Checking link" : state === "success" ? "Verified" : "Verification failed"}
+          {state === "loading"
+            ? "Checking link"
+            : state === "success"
+              ? "Verified"
+              : "Verification failed"}
         </h1>
         <p className="mt-4 text-sm text-slate-300">{message}</p>
         <div className="mt-8">

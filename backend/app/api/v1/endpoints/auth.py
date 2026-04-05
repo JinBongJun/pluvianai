@@ -424,7 +424,6 @@ class VerifyEmailResponse(BaseModel):
 async def register(
     user_data: UserCreate,
     request: Request,
-    response: Response,
     db: Session = Depends(get_db),
     user_service = Depends(get_user_service),
     audit_service = Depends(get_audit_service)
@@ -508,15 +507,6 @@ async def register(
         except Exception as e:
             logger.warning(f"Failed to send signup verification email: {e}", exc_info=True)
 
-        bootstrap_result = _bootstrap_default_workspace_for_signup(user.id, db)
-        if bootstrap_result.get("reason") != "ok":
-            logger.info(
-                "Signup workspace bootstrap skipped",
-                extra={"user_id": user.id, "reason": bootstrap_result.get("reason")},
-            )
-
-        _issue_session_for_user(response, user, db)
-        
         return user
     except EntityAlreadyExistsError as e:
         logger.warning(f"Registration failed: Email already exists - {mask_email(user_data.email)}")
@@ -1037,6 +1027,7 @@ async def logout(
 
 @router.get("/verify-email", response_model=VerifyEmailResponse)
 async def verify_email(
+    response: Response,
     token: str = Query(..., min_length=8),
     db: Session = Depends(get_db),
 ):
@@ -1052,6 +1043,21 @@ async def verify_email(
     raise_if = {"user_not_found", "invalid_purpose"}
     if err in raise_if or not result:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not verify email.")
+
+    if result["purpose"] == "signup":
+        user = db.query(User).filter(User.email == result["email"]).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Could not verify email.")
+
+        bootstrap_result = _bootstrap_default_workspace_for_signup(user.id, db)
+        if bootstrap_result.get("reason") != "ok":
+            logger.info(
+                "Verification workspace bootstrap skipped",
+                extra={"user_id": user.id, "reason": bootstrap_result.get("reason")},
+            )
+
+        _issue_session_for_user(response, user, db)
+
     return VerifyEmailResponse(**result)
 
 
