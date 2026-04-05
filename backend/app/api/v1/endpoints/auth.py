@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.core.config import settings
 from app.core.database import get_db
@@ -346,7 +347,7 @@ def _bootstrap_default_workspace_for_signup(user_id: int, db: Session) -> dict:
 
             result["project_id"] = project.id
         return result
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         logger.warning(
             "Signup workspace bootstrap failed",
             extra={"user_id": user_id, "error": str(exc)},

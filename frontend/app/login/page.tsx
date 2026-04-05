@@ -228,8 +228,11 @@ export default function LoginPage() {
           if (workspace?.path?.startsWith("/")) {
             targetPath = workspace.path;
           }
-        } catch {
-          // Keep default redirect when lookup fails.
+        } catch (workspaceError) {
+          analytics.capture("default_workspace_lookup_failed", {
+            error:
+              workspaceError instanceof Error ? workspaceError.message : "unknown_workspace_error",
+          });
         }
       }
       start();
