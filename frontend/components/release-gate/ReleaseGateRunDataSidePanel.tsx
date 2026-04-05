@@ -339,7 +339,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                                   )}
                                 >
                                   <div
-                                    className="flex cursor-pointer items-start gap-2.5 px-3 py-3 sm:gap-3 sm:p-4"
+                                    className="flex cursor-pointer items-start gap-2.5 px-3 py-3.5 sm:gap-3 sm:p-4"
                                     onClick={() => openBaselineDetailSnapshot(snap)}
                                   >
                                     <div className="pt-0.5" onClick={e => e.stopPropagation()}>
@@ -362,7 +362,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                                         className="h-4 w-4 rounded border-white/10 bg-black/40 text-fuchsia-500"
                                       />
                                     </div>
-                                    <div className="min-w-0 flex-1 space-y-1">
+                                    <div className="min-w-0 flex-1 space-y-2">
                                       <div className="flex items-center justify-between gap-2">
                                         <span className="font-mono text-[11px] font-bold text-slate-300">
                                           {formatDateTime(snap.created_at)}
