@@ -63,19 +63,13 @@ class TestAuthAPI:
         token = db.query(EmailVerificationToken).filter(EmailVerificationToken.email == "newuser@example.com").first()
         assert token is not None
         set_cookie = response.headers.get_list("set-cookie")
-        assert any("access_token=" in cookie for cookie in set_cookie)
-        assert any("refresh_token=" in cookie for cookie in set_cookie)
+        assert not any("access_token=" in cookie for cookie in set_cookie)
+        assert not any("refresh_token=" in cookie for cookie in set_cookie)
 
         workspace_response = await async_client.get("/api/v1/auth/me/default-workspace")
-        assert workspace_response.status_code == status.HTTP_200_OK
-        workspace = workspace_response.json()
-        assert workspace["organization_id"] is not None
-        assert workspace["project_id"] is not None
-        assert workspace["path"].endswith(
-            f"/projects/{workspace['project_id']}/live-view"
-        )
+        assert workspace_response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    async def test_register_bootstraps_default_workspace(self, async_client, db):
+    async def test_register_does_not_bootstrap_default_workspace_before_verification(self, async_client, db):
         response = await async_client.post(
             "/api/v1/auth/register",
             json={
@@ -94,30 +88,7 @@ class TestAuthAPI:
             .filter(Organization.owner_id == user_id, Organization.is_deleted.is_(False))
             .first()
         )
-        assert org is not None
-
-        membership = (
-            db.query(OrganizationMember)
-            .filter(
-                OrganizationMember.organization_id == org.id,
-                OrganizationMember.user_id == user_id,
-            )
-            .first()
-        )
-        assert membership is not None
-        assert str(membership.role) == "owner"
-
-        project = (
-            db.query(Project)
-            .filter(
-                Project.owner_id == user_id,
-                Project.organization_id == org.id,
-                Project.is_active.is_(True),
-                Project.is_deleted.is_(False),
-            )
-            .first()
-        )
-        assert project is not None
+        assert org is None
     
     async def test_register_duplicate_email(self, async_client, test_user):
         """Test registering with duplicate email"""
@@ -375,6 +346,18 @@ class TestAuthAPI:
         verify_res = await async_client.get(f"/api/v1/auth/verify-email?token={token.token}")
         assert verify_res.status_code == status.HTTP_200_OK
         assert verify_res.json()["verified"] is True
+        set_cookie = verify_res.headers.get_list("set-cookie")
+        assert any("access_token=" in cookie for cookie in set_cookie)
+        assert any("refresh_token=" in cookie for cookie in set_cookie)
+
+        workspace_res = await async_client.get("/api/v1/auth/me/default-workspace")
+        assert workspace_res.status_code == status.HTTP_200_OK
+        workspace = workspace_res.json()
+        assert workspace["organization_id"] is not None
+        assert workspace["project_id"] is not None
+        assert workspace["path"].endswith(
+            f"/projects/{workspace['project_id']}/live-view"
+        )
 
         login_res = await async_client.post(
             "/api/v1/auth/login",
@@ -431,7 +414,7 @@ class TestAuthAPI:
         payload = target_res.json()
         assert payload["organization_id"] == org.id
         assert payload["project_id"] is not None
-        assert payload["path"] == f"/organizations/{org.id}/projects/{payload['project_id']}"
+        assert payload["path"] == f"/organizations/{org.id}/projects/{payload['project_id']}/live-view"
     
     async def test_login_invalid_credentials(self, async_client, test_user):
         """Test login with invalid credentials"""
