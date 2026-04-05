@@ -237,9 +237,7 @@ export default function LoginPage() {
       }
       start();
       analytics.capture("user_login", { method: "password" });
-      setTimeout(() => {
-        window.location.href = targetPath;
-      }, 400);
+      router.replace(targetPath);
     } catch (error) {
       setFormError(getAuthErrorMessage(error, "login"));
       setIsSubmitting(false);
