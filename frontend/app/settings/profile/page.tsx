@@ -44,6 +44,7 @@ type NoticeTone = "success" | "error" | "warning";
 type AccountUsage = {
   plan_type?: string;
   subscription_status?: string;
+  current_period_end?: string | null;
 };
 
 export default function ProfileSettingsPage() {
@@ -145,6 +146,21 @@ export default function ProfileSettingsPage() {
     }
     return true;
   }, [accountUsage?.plan_type, accountUsage?.subscription_status]);
+
+  const subscriptionDeletionNotice = useMemo(() => {
+    if (!hasBlockingSubscription) return null;
+    const periodEnd = accountUsage?.current_period_end;
+    if (!periodEnd) {
+      return "Active subscription found. Account deletion becomes available after the current billing period ends.";
+    }
+
+    const parsed = new Date(periodEnd);
+    if (Number.isNaN(parsed.getTime())) {
+      return "Active subscription found. Account deletion becomes available after the current billing period ends.";
+    }
+
+    return `Active subscription found. Your plan remains active until ${parsed.toLocaleString()}. Account deletion becomes available after that date.`;
+  }, [accountUsage?.current_period_end, hasBlockingSubscription]);
 
   const canSubmitDeleteAccount =
     !deleteAccountBusy &&
@@ -320,7 +336,7 @@ export default function ProfileSettingsPage() {
   const handleDeleteAccount = async () => {
     if (hasBlockingSubscription) {
       setNoticeTone("warning");
-      setNotice("Active subscription found. Cancel it from Billing before deleting your account.");
+      setNotice(subscriptionDeletionNotice || "Active subscription found. Account deletion becomes available after the current billing period ends.");
       return;
     }
     if (!deletePassword.trim()) {
@@ -355,7 +371,7 @@ export default function ProfileSettingsPage() {
 
       if (code === "ACTIVE_SUBSCRIPTION") {
         setNoticeTone("warning");
-        setNotice("Active subscription found. Cancel it from Billing before deleting your account.");
+        setNotice(subscriptionDeletionNotice || "Active subscription found. Account deletion becomes available after the current billing period ends.");
       } else if (code === "LAST_OWNER_OF_SHARED_ORG") {
         setNoticeTone("warning");
         setNotice("Transfer ownership of your shared organization before deleting your account.");
@@ -644,7 +660,7 @@ export default function ProfileSettingsPage() {
           </p>
           {hasBlockingSubscription ? (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-              Active subscription found. Cancel it from Billing before deleting your account.
+              {subscriptionDeletionNotice}
             </div>
           ) : null}
           <div className="grid md:grid-cols-2 gap-4">

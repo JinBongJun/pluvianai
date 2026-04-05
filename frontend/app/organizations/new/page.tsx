@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import TopHeader from "@/components/layout/TopHeader";
 import { createOrganization } from "@/lib/orgProjectMutations";
@@ -9,6 +9,11 @@ import { Beaker, ArrowLeft, Building2, Shield, Activity, Plus } from "lucide-rea
 import Button from "@/components/ui/Button";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { PlanLimitBanner } from "@/components/PlanLimitBanner";
+import { useAccountUsage } from "@/hooks/useAccountUsage";
+import {
+  ACCOUNT_USAGE_FALLBACK_BY_PLAN,
+  accountUsageAsNumber,
+} from "@/lib/accountUsage";
 
 export default function NewOrganizationPage() {
   const router = useRouter();
@@ -18,11 +23,45 @@ export default function NewOrganizationPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [planError, setPlanError] = useState<PlanLimitError | null>(null);
+  const { data: myUsage } = useAccountUsage(true);
+
+  const orgCreateBlocked = useMemo(() => {
+    const planType = (myUsage?.plan_type || "free").toLowerCase();
+    const limits = myUsage?.limits || {};
+    const usage = (myUsage?.usage_this_month || {}) as Record<string, unknown>;
+    const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
+    const orgLimit = accountUsageAsNumber((limits as Record<string, unknown>).organizations, fb.organizations);
+    const orgUsed = accountUsageAsNumber(usage.organizations_used, 0);
+    return orgLimit !== -1 && orgUsed >= orgLimit;
+  }, [myUsage]);
+
+  const clientOrgLimitPlanError = useMemo((): PlanLimitError | null => {
+    if (!orgCreateBlocked) return null;
+    const planType = (myUsage?.plan_type || "free").toLowerCase();
+    const limits = myUsage?.limits || {};
+    const usage = (myUsage?.usage_this_month || {}) as Record<string, unknown>;
+    const fb = ACCOUNT_USAGE_FALLBACK_BY_PLAN[planType] ?? ACCOUNT_USAGE_FALLBACK_BY_PLAN.free;
+    const orgLimit = accountUsageAsNumber((limits as Record<string, unknown>).organizations, fb.organizations);
+    const orgUsed = accountUsageAsNumber(usage.organizations_used, 0);
+    return {
+      code: "ORG_LIMIT_REACHED",
+      message: "",
+      planType: String(myUsage?.plan_type || "free"),
+      current: orgUsed,
+      limit: orgLimit,
+      upgradePath: "/settings/billing",
+    };
+  }, [myUsage, orgCreateBlocked]);
+
+  const displayPlanLimitError = planError ?? clientOrgLimitPlanError;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setError("Organization name is required");
+      return;
+    }
+    if (orgCreateBlocked) {
       return;
     }
     setLoading(true);
@@ -173,8 +212,10 @@ export default function NewOrganizationPage() {
             </div>
           </div>
 
-          {planError && <PlanLimitBanner {...planError} context="organization" className="mb-4" />}
-          {error && !planError && (
+          {displayPlanLimitError && (
+            <PlanLimitBanner {...displayPlanLimitError} context="organization" className="mb-4" />
+          )}
+          {error && !displayPlanLimitError && (
             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 animate-shake space-y-3">
               <p className="text-xs font-bold text-red-400 uppercase tracking-wider">{error}</p>
             </div>
@@ -190,7 +231,7 @@ export default function NewOrganizationPage() {
             </button>
             <Button
               type="submit"
-              disabled={!name.trim() || loading}
+              disabled={!name.trim() || loading || orgCreateBlocked}
               className="h-14 px-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-widest shadow-[0_0_30px_-5px_rgba(16,185,129,0.5)] transition-all flex items-center gap-3 group/btn hover:scale-[1.05] active:scale-[0.98]"
             >
               <span className="text-base">{loading ? "Creating..." : "Create Organization"}</span>
