@@ -263,12 +263,13 @@ export function ReleaseGateSelectedAgentSurface({
           </div>
         )}
 
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {surfaceTab === "run" ? (
-          <div className="flex flex-1 min-h-0 flex-col gap-4 px-5 py-5">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5 custom-scrollbar">
             <p className="shrink-0 text-center text-[11px] font-medium uppercase tracking-[0.2em] text-slate-500">
               ① Pick inputs (side panels) → ② Review below → ③ Start
             </p>
-            <div className="flex min-h-0 flex-1 gap-6">
+            <div className="flex min-h-0 flex-1 items-stretch gap-6">
               <div className="flex w-[240px] shrink-0 flex-col min-h-0 border-r border-white/[0.05] pr-5">
                 <div className="mb-3 flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/40">
                   <ShieldCheck className="h-4 w-4 text-emerald-500/70" />
@@ -382,7 +383,7 @@ export function ReleaseGateSelectedAgentSurface({
             </div>
           </div>
         ) : (
-          <div className="flex flex-1 min-h-0 gap-6 px-5 py-5">
+          <div className="flex min-h-0 flex-1 gap-6 overflow-y-auto px-5 py-5 custom-scrollbar">
             <div className="flex w-[280px] shrink-0 flex-col min-h-0 border-r border-white/[0.05] pr-5">
               <div className="mb-5 flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/40">
                 <ShieldCheck className="h-4 w-4 text-emerald-500/70" />
@@ -391,18 +392,18 @@ export function ReleaseGateSelectedAgentSurface({
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar" onWheel={handleEvalListWheel}>
                 {Array.isArray(resolvedDetails.activeChecksCards) &&
                 resolvedDetails.activeChecksCards.length > 0 ? (
-                  <ul ref={evalListScrollRef} className="space-y-4">
+                  <ul ref={evalListScrollRef} className="space-y-5">
                     {resolvedDetails.activeChecksCards.map(card => (
-                      <li key={card.id} className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2.5">
-                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                          <span className="truncate text-[13px] font-semibold tracking-wide text-white/90">
+                      <li key={card.id} className="flex flex-col gap-2">
+                        <div className="flex items-start gap-2.5">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                          <span className="min-w-0 text-[13px] font-semibold leading-snug tracking-wide text-white/90">
                             {card.label}
                           </span>
                         </div>
                         {card.params ? (
-                          <div className="pl-[26px]">
-                            <span className="line-clamp-2 rounded-md bg-white/[0.02] px-2 py-1 font-mono text-xs text-white/40">
+                          <div className="pl-7">
+                            <span className="line-clamp-2 rounded-md bg-white/[0.02] px-2.5 py-1.5 font-mono text-xs leading-relaxed text-white/45">
                               {card.params}
                             </span>
                           </div>
@@ -436,18 +437,18 @@ export function ReleaseGateSelectedAgentSurface({
                 </div>
                 {Array.isArray(resolvedDetails.policyCheckCards) &&
                 resolvedDetails.policyCheckCards.length > 0 ? (
-                  <ul className="space-y-3">
+                  <ul className="space-y-4">
                     {resolvedDetails.policyCheckCards.map(card => (
-                      <li key={card.id} className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2.5">
-                          <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-300" />
-                          <span className="truncate text-[13px] font-semibold tracking-wide text-white/90">
+                      <li key={card.id} className="flex flex-col gap-2">
+                        <div className="flex items-start gap-2.5">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                          <span className="min-w-0 text-[13px] font-semibold leading-snug tracking-wide text-white/90">
                             {card.label}
                           </span>
                         </div>
                         {card.detail ? (
-                          <div className="pl-[26px]">
-                            <span className="line-clamp-2 rounded-md bg-white/[0.02] px-2 py-1 text-xs text-white/40">
+                          <div className="pl-7">
+                            <span className="line-clamp-3 rounded-md bg-white/[0.02] px-2.5 py-1.5 text-xs leading-relaxed text-white/45">
                               {card.detail}
                             </span>
                           </div>
@@ -519,11 +520,11 @@ export function ReleaseGateSelectedAgentSurface({
                   </div>
                 </div>
 
-                <div className="flex min-h-0 flex-1 flex-col border-t border-white/5 pt-3">
+                <div className="flex max-h-[min(42vh,380px)] min-h-0 flex-col border-t border-white/5 pt-3">
                   <div className="mb-1 text-[10px] uppercase tracking-[0.15em] text-white/40">
                     Payload (raw preview)
                   </div>
-                  <pre className="h-full min-h-[120px] overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-white/60 custom-scrollbar">
+                  <pre className="min-h-[120px] flex-1 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-white/60 custom-scrollbar">
                     {String(rgConfig.originalPayloadPreview || "{}")}
                   </pre>
                 </div>
@@ -531,14 +532,15 @@ export function ReleaseGateSelectedAgentSurface({
             </div>
           </div>
         )}
+        </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-4 border-t border-white/[0.08] bg-black/20 px-6 pb-6 pt-5 shadow-[0_-14px_30px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-          <div className="flex min-w-0 flex-1 items-center gap-4">
-            <span className="shrink-0 text-sm font-medium text-white/60">{baselineSummaryText}</span>
+        <div className="flex shrink-0 flex-col gap-3 border-t border-white/[0.08] bg-black/20 px-6 pb-6 pt-5 shadow-[0_-14px_30px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
+            <span className="min-w-0 text-sm font-medium leading-snug text-white/60">{baselineSummaryText}</span>
             {lastRunStatusLabel ? (
               <span
                 className={clsx(
-                  "shrink-0 rounded-lg border px-2.5 py-1 text-xs font-bold uppercase tracking-wider",
+                  "w-fit shrink-0 rounded-lg border px-2.5 py-1 text-xs font-bold uppercase tracking-wider",
                   (lastRunStatusLabel === "Healthy" || lastRunStatusLabel === "Passed") &&
                     "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
                   (lastRunStatusLabel === "Flagged" ||
@@ -558,7 +560,7 @@ export function ReleaseGateSelectedAgentSurface({
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3 self-end sm:self-auto">
             <div
               ref={node => {
                 (
