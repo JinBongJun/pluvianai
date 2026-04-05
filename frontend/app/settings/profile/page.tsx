@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { settingsAPI } from "@/lib/api";
+import { authAPI, settingsAPI } from "@/lib/api";
+import { clearFrontendAuthSession } from "@/lib/api/client";
 import { Key, Trash2, Copy, UserCircle2, Pencil, Check, X } from "lucide-react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import AccountLayout from "@/components/layout/AccountLayout";
@@ -38,6 +40,7 @@ type CreatedApiKey = {
 };
 
 export default function ProfileSettingsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [apiKeys, setApiKeys] = useState<UserApiKey[]>([]);
@@ -58,6 +61,9 @@ export default function ProfileSettingsPage() {
   const [editingKeyName, setEditingKeyName] = useState("");
   const [notice, setNotice] = useState<string>("");
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<CreatedApiKey | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
   const hasToken = useRequireAuth();
 
   useEffect(() => {
@@ -236,6 +242,55 @@ export default function ProfileSettingsPage() {
       setNotice("Copied API key to clipboard.");
     } catch {
       setNotice("Could not copy automatically. Please copy manually.");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword.trim()) {
+      setNotice("Enter your password to delete this account.");
+      return;
+    }
+    if (deleteConfirmation.trim().toUpperCase() !== "DELETE") {
+      setNotice("Type DELETE to confirm account deletion.");
+      return;
+    }
+
+    setDeleteAccountBusy(true);
+    setNotice("");
+    try {
+      await settingsAPI.deleteAccount(deletePassword, deleteConfirmation);
+      await authAPI.logout().catch(() => undefined);
+      await clearFrontendAuthSession().catch(() => undefined);
+      router.replace("/");
+    } catch (err: any) {
+      logger.error("Failed to delete account", err);
+      const code =
+        err?.response?.data?.detail?.code ??
+        err?.response?.data?.error?.code ??
+        err?.response?.data?.error?.details?.code;
+      const message =
+        err?.response?.data?.detail?.message ??
+        err?.response?.data?.error?.message ??
+        err?.response?.data?.detail ??
+        "Failed to delete account.";
+
+      if (code === "ACTIVE_SUBSCRIPTION") {
+        setNotice("Active subscription found. Cancel it from Billing before deleting your account.");
+      } else if (code === "LAST_OWNER_OF_SHARED_ORG") {
+        setNotice("Transfer ownership of your shared organization before deleting your account.");
+      } else if (code === "GOOGLE_REAUTH_REQUIRED") {
+        setNotice("Google-only accounts cannot be deleted from self-serve settings yet.");
+      } else if (code === "PASSWORD_CONFIRMATION_FAILED") {
+        setNotice("Incorrect password. Please try again.");
+      } else if (code === "DELETE_CONFIRMATION_MISMATCH") {
+        setNotice("Type DELETE to confirm account deletion.");
+      } else if (typeof message === "string" && message.trim()) {
+        setNotice(message);
+      } else {
+        setNotice("Failed to delete account.");
+      }
+    } finally {
+      setDeleteAccountBusy(false);
     }
   };
 
@@ -481,6 +536,46 @@ export default function ProfileSettingsPage() {
                 </div>
               ))
             )}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-6 space-y-4">
+          <h2 className="text-lg font-bold text-white">Danger Zone</h2>
+          <p className="text-sm text-slate-300">
+            Deleting your account signs you out, revokes your API keys, and removes access to your
+            personal workspace. If you have an active subscription, cancel it in Billing first.
+          </p>
+          <p className="text-xs text-slate-500">
+            Shared organizations require ownership transfer before deletion.
+          </p>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Current password</label>
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={e => setDeletePassword(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                placeholder="Current password"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">Type DELETE to confirm</label>
+              <input
+                value={deleteConfirmation}
+                onChange={e => setDeleteConfirmation(e.target.value)}
+                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                placeholder="DELETE"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="danger" onClick={handleDeleteAccount} disabled={deleteAccountBusy}>
+              {deleteAccountBusy ? "Deleting..." : "Delete account"}
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/settings/billing")}>
+              Open billing
+            </Button>
           </div>
         </section>
       </div>

@@ -1,6 +1,12 @@
 import pytest
 from fastapi import status
 from app.models.email_verification_token import EmailVerificationToken
+from app.models.api_key import APIKey
+from app.models.organization import Organization, OrganizationMember
+from app.models.project import Project
+from app.models.refresh_token import RefreshToken
+from app.models.subscription import Subscription
+from app.models.user_api_key import UserApiKey
 
 
 def _extract_data(payload: dict):
@@ -183,3 +189,123 @@ class TestSettingsProfileAndApiKeys:
             headers=auth_headers,
         )
         assert email_res.status_code == status.HTTP_400_BAD_REQUEST
+
+    async def test_h8_delete_account_blocks_active_subscription(
+        self, async_client, auth_headers, test_user, db
+    ):
+        db.add(
+            Subscription(
+                user_id=test_user.id,
+                plan_id="starter",
+                status="active",
+            )
+        )
+        db.commit()
+
+        response = await async_client.delete(
+            "/api/v1/settings/profile",
+            json={"password": "testpassword123", "confirmation_text": "DELETE"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        detail = response.json().get("error") or response.json().get("detail") or {}
+        assert "subscription" in str(detail).lower()
+
+    async def test_h9_delete_account_blocks_shared_org_owner(
+        self, async_client, auth_headers, test_user, db
+    ):
+        other_user = type(test_user)(
+            email="teammate@example.com",
+            hashed_password=test_user.hashed_password,
+            full_name="Teammate",
+            is_active=True,
+        )
+        db.add(other_user)
+        db.commit()
+        db.refresh(other_user)
+
+        org = Organization(name="Shared Org", owner_id=test_user.id, plan_type="free")
+        db.add(org)
+        db.flush()
+        db.add(OrganizationMember(organization_id=org.id, user_id=test_user.id, role="owner"))
+        db.add(OrganizationMember(organization_id=org.id, user_id=other_user.id, role="member"))
+        db.commit()
+
+        response = await async_client.delete(
+            "/api/v1/settings/profile",
+            json={"password": "testpassword123", "confirmation_text": "DELETE"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        detail = response.json().get("error") or response.json().get("detail") or {}
+        assert "ownership" in str(detail).lower() or "shared organization" in str(detail).lower()
+
+    async def test_h10_delete_account_soft_deletes_personal_workspace_and_revokes_credentials(
+        self, async_client, auth_headers, test_user, db
+    ):
+        org = Organization(name="Solo Org", owner_id=test_user.id, plan_type="free")
+        db.add(org)
+        db.flush()
+        db.add(OrganizationMember(organization_id=org.id, user_id=test_user.id, role="owner"))
+
+        project = Project(
+            name="Solo Project",
+            owner_id=test_user.id,
+            organization_id=org.id,
+            is_active=True,
+            is_deleted=False,
+            usage_mode="full",
+        )
+        db.add(project)
+        db.flush()
+
+        db.add(APIKey(user_id=test_user.id, key_hash="hash-1", name="SDK Key", is_active=True))
+        db.add(
+            UserApiKey(
+                project_id=project.id,
+                user_id=test_user.id,
+                provider="openai",
+                encrypted_key="enc",
+                key_hint="sk-...123",
+                is_active=True,
+            )
+        )
+        db.add(
+            RefreshToken(
+                user_id=test_user.id,
+                token_hash="refresh-hash-1",
+                expires_at=test_user.created_at,
+                is_revoked=False,
+            )
+        )
+        db.commit()
+
+        response = await async_client.delete(
+            "/api/v1/settings/profile",
+            json={"password": "testpassword123", "confirmation_text": "DELETE"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        db.refresh(test_user)
+        db.refresh(org)
+        db.refresh(project)
+        assert test_user.is_active is False
+        assert org.is_deleted is True
+        assert project.is_deleted is True
+        assert project.is_active is False
+        assert db.query(APIKey).filter(APIKey.user_id == test_user.id, APIKey.is_active.is_(True)).count() == 0
+        assert (
+            db.query(UserApiKey)
+            .filter(UserApiKey.user_id == test_user.id, UserApiKey.is_active.is_(True))
+            .count()
+            == 0
+        )
+        assert (
+            db.query(RefreshToken)
+            .filter(RefreshToken.user_id == test_user.id, RefreshToken.is_revoked.is_(False))
+            .count()
+            == 0
+        )

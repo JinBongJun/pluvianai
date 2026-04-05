@@ -19,9 +19,9 @@ export const settingsAPI = {
     return response.data;
   },
 
-  deleteAccount: async (password: string) => {
+  deleteAccount: async (password: string, confirmationText: string) => {
     await apiClient.delete("/settings/profile", {
-      data: { password },
+      data: { password, confirmation_text: confirmationText },
     });
   },
 
