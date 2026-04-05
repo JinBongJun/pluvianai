@@ -62,6 +62,18 @@ class TestAuthAPI:
         assert "password" not in data  # Password should not be in response
         token = db.query(EmailVerificationToken).filter(EmailVerificationToken.email == "newuser@example.com").first()
         assert token is not None
+        set_cookie = response.headers.get_list("set-cookie")
+        assert any("access_token=" in cookie for cookie in set_cookie)
+        assert any("refresh_token=" in cookie for cookie in set_cookie)
+
+        workspace_response = await async_client.get("/api/v1/auth/me/default-workspace")
+        assert workspace_response.status_code == status.HTTP_200_OK
+        workspace = workspace_response.json()
+        assert workspace["organization_id"] is not None
+        assert workspace["project_id"] is not None
+        assert workspace["path"].endswith(
+            f"/projects/{workspace['project_id']}/live-view"
+        )
 
     async def test_register_bootstraps_default_workspace(self, async_client, db):
         response = await async_client.post(
@@ -269,7 +281,6 @@ class TestAuthAPI:
             headers={"Cookie": f"oauth_google_state={cookie_state}"},
         )
         assert callback_res.status_code == status.HTTP_302_FOUND
-        assert callback_res.headers["location"] == "http://frontend.test/organizations"
 
         user = db.query(User).filter(User.email == "new-google@example.com").first()
         assert user is not None
@@ -295,6 +306,10 @@ class TestAuthAPI:
             .first()
         )
         assert project is not None
+        assert (
+            callback_res.headers["location"]
+            == f"http://frontend.test/organizations/{org.id}/projects/{project.id}/live-view"
+        )
 
     async def test_google_oauth_callback_merges_existing_password_user(
         self, async_client, db, test_user, monkeypatch

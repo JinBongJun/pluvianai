@@ -366,7 +366,11 @@ def _get_default_workspace_redirect(user_id: int, db: Session) -> tuple[str, int
     if not project:
         return f"/organizations/{org.id}/projects", int(org.id), None
 
-    return f"/organizations/{org.id}/projects/{project.id}", int(org.id), int(project.id)
+    return (
+        f"/organizations/{org.id}/projects/{project.id}/live-view",
+        int(org.id),
+        int(project.id),
+    )
 
 
 class UserCreate(BaseModel):
@@ -420,6 +424,7 @@ class VerifyEmailResponse(BaseModel):
 async def register(
     user_data: UserCreate,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     user_service = Depends(get_user_service),
     audit_service = Depends(get_audit_service)
@@ -509,6 +514,8 @@ async def register(
                 "Signup workspace bootstrap skipped",
                 extra={"user_id": user.id, "reason": bootstrap_result.get("reason")},
             )
+
+        _issue_session_for_user(response, user, db)
         
         return user
     except EntityAlreadyExistsError as e:
@@ -648,6 +655,7 @@ async def google_oauth_callback(
                 "Google signup workspace bootstrap skipped",
                 extra={"user_id": user.id, "reason": bootstrap_result.get("reason")},
             )
+        next_path, _, _ = _get_default_workspace_redirect(user.id, db)
 
     redirect = _redirect_to_frontend(next_path)
     _clear_oauth_state_cookie(redirect)
