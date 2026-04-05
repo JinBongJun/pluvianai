@@ -39,6 +39,13 @@ type CreatedApiKey = {
   message?: string;
 };
 
+type NoticeTone = "success" | "error" | "warning";
+
+type AccountUsage = {
+  plan_type?: string;
+  subscription_status?: string;
+};
+
 export default function ProfileSettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -60,10 +67,12 @@ export default function ProfileSettingsPage() {
   const [editingKeyId, setEditingKeyId] = useState<number | null>(null);
   const [editingKeyName, setEditingKeyName] = useState("");
   const [notice, setNotice] = useState<string>("");
+  const [noticeTone, setNoticeTone] = useState<NoticeTone>("success");
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<CreatedApiKey | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteAccountBusy, setDeleteAccountBusy] = useState(false);
+  const [accountUsage, setAccountUsage] = useState<AccountUsage | null>(null);
   const hasToken = useRequireAuth();
 
   useEffect(() => {
@@ -71,12 +80,18 @@ export default function ProfileSettingsPage() {
 
     const load = async () => {
       try {
-        const [p, keys] = await Promise.all([settingsAPI.getProfile(), settingsAPI.getAPIKeys()]);
+        const [p, keys, usage] = await Promise.all([
+          settingsAPI.getProfile(),
+          settingsAPI.getAPIKeys(),
+          authAPI.getMyUsage().catch(() => null),
+        ]);
         setProfile(p);
         setFullName((p?.full_name || "").trim());
         setApiKeys(Array.isArray(keys) ? keys : []);
+        setAccountUsage(usage);
       } catch (err) {
         logger.error("Failed to load profile or API keys", err);
+        setNoticeTone("error");
         setNotice("Failed to load profile settings.");
       } finally {
         setLoading(false);
@@ -84,6 +99,28 @@ export default function ProfileSettingsPage() {
     };
 
     void load();
+  }, [hasToken]);
+
+  useEffect(() => {
+    if (!hasToken) return;
+
+    const refreshUsage = async () => {
+      try {
+        const usage = await authAPI.getMyUsage();
+        setAccountUsage(usage);
+      } catch {
+        // Keep the last known state; backend still blocks unsafe deletions.
+      }
+    };
+
+    const onFocus = () => {
+      void refreshUsage();
+    };
+
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+    };
   }, [hasToken]);
 
   const canSaveName = useMemo(() => {
@@ -99,6 +136,22 @@ export default function ProfileSettingsPage() {
     return "Email/password";
   }, [profile?.google_login_enabled, profile?.password_login_enabled]);
 
+  const hasBlockingSubscription = useMemo(() => {
+    const planType = String(accountUsage?.plan_type || "free").toLowerCase();
+    const subscriptionStatus = String(accountUsage?.subscription_status || "free").toLowerCase();
+    if (planType === "free") return false;
+    if (subscriptionStatus === "cancelled" || subscriptionStatus === "canceled" || subscriptionStatus === "free") {
+      return false;
+    }
+    return true;
+  }, [accountUsage?.plan_type, accountUsage?.subscription_status]);
+
+  const canSubmitDeleteAccount =
+    !deleteAccountBusy &&
+    !hasBlockingSubscription &&
+    deleteConfirmation.trim().toUpperCase() === "DELETE" &&
+    deletePassword.trim().length > 0;
+
   const handleSaveProfile = async () => {
     if (!canSaveName) return;
     setSaveBusy(true);
@@ -107,9 +160,11 @@ export default function ProfileSettingsPage() {
       const updated = await settingsAPI.updateProfile({ full_name: fullName.trim() || undefined });
       setProfile(updated);
       setFullName((updated?.full_name || "").trim());
+      setNoticeTone("success");
       setNotice("Profile updated.");
     } catch (err) {
       logger.error("Failed to update profile", err);
+      setNoticeTone("error");
       setNotice("Failed to update profile.");
     } finally {
       setSaveBusy(false);
@@ -128,9 +183,11 @@ export default function ProfileSettingsPage() {
       setNewKeyName("");
       const keys = await settingsAPI.getAPIKeys();
       setApiKeys(Array.isArray(keys) ? keys : []);
+      setNoticeTone("success");
       setNotice("API key created. Copy it now - it will not be shown again.");
     } catch (err) {
       logger.error("Failed to create API key", err);
+      setNoticeTone("error");
       setNotice("Failed to create API key.");
     } finally {
       setKeyBusy(false);
@@ -139,14 +196,17 @@ export default function ProfileSettingsPage() {
 
   const handleChangePassword = async () => {
     if (!currentPassword.trim() || !newPassword.trim() || !confirmNewPassword.trim()) {
+      setNoticeTone("error");
       setNotice("Please fill in all password fields.");
       return;
     }
     if (newPassword.length < 12) {
+      setNoticeTone("error");
       setNotice("New password must be at least 12 characters.");
       return;
     }
     if (newPassword !== confirmNewPassword) {
+      setNoticeTone("error");
       setNotice("New password confirmation does not match.");
       return;
     }
@@ -158,9 +218,11 @@ export default function ProfileSettingsPage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmNewPassword("");
+      setNoticeTone("success");
       setNotice("Password changed successfully.");
     } catch (err) {
       logger.error("Failed to change password", err);
+      setNoticeTone("error");
       setNotice("Failed to change password. Check your current password.");
     } finally {
       setPasswordBusy(false);
@@ -169,6 +231,7 @@ export default function ProfileSettingsPage() {
 
   const handleRequestEmailChange = async () => {
     if (!newEmail.trim() || !emailPassword.trim()) {
+      setNoticeTone("error");
       setNotice("Enter your new email and current password.");
       return;
     }
@@ -178,9 +241,11 @@ export default function ProfileSettingsPage() {
       await settingsAPI.requestEmailChange(newEmail.trim(), emailPassword);
       setEmailPassword("");
       setNewEmail("");
+      setNoticeTone("success");
       setNotice("Confirmation email sent. Open the link in that inbox to finish the change.");
     } catch (err) {
       logger.error("Failed to request email change", err);
+      setNoticeTone("error");
       setNotice("Failed to send email change confirmation. Check your password and try again.");
     } finally {
       setEmailBusy(false);
@@ -193,9 +258,11 @@ export default function ProfileSettingsPage() {
     try {
       await settingsAPI.deleteAPIKey(keyId);
       setApiKeys(prev => prev.filter(k => k.id !== keyId));
+      setNoticeTone("success");
       setNotice("API key removed.");
     } catch (err) {
       logger.error("Failed to delete API key", err);
+      setNoticeTone("error");
       setNotice("Failed to remove API key.");
     } finally {
       setDeleteBusyId(null);
@@ -215,6 +282,7 @@ export default function ProfileSettingsPage() {
   const handleRenameApiKey = async (keyId: number) => {
     const nextName = editingKeyName.trim();
     if (!nextName) {
+      setNoticeTone("error");
       setNotice("API key name cannot be empty.");
       return;
     }
@@ -226,9 +294,11 @@ export default function ProfileSettingsPage() {
       setApiKeys(prev => prev.map(k => (k.id === keyId ? { ...k, name: nextName } : k)));
       setEditingKeyId(null);
       setEditingKeyName("");
+      setNoticeTone("success");
       setNotice("API key name updated.");
     } catch (err) {
       logger.error("Failed to rename API key", err);
+      setNoticeTone("error");
       setNotice("Failed to rename API key.");
     } finally {
       setRenameBusyId(null);
@@ -239,18 +309,27 @@ export default function ProfileSettingsPage() {
     if (!newlyCreatedKey?.api_key) return;
     try {
       await navigator.clipboard.writeText(newlyCreatedKey.api_key);
+      setNoticeTone("success");
       setNotice("Copied API key to clipboard.");
     } catch {
+      setNoticeTone("warning");
       setNotice("Could not copy automatically. Please copy manually.");
     }
   };
 
   const handleDeleteAccount = async () => {
+    if (hasBlockingSubscription) {
+      setNoticeTone("warning");
+      setNotice("Active subscription found. Cancel it from Billing before deleting your account.");
+      return;
+    }
     if (!deletePassword.trim()) {
+      setNoticeTone("error");
       setNotice("Enter your password to delete this account.");
       return;
     }
     if (deleteConfirmation.trim().toUpperCase() !== "DELETE") {
+      setNoticeTone("error");
       setNotice("Type DELETE to confirm account deletion.");
       return;
     }
@@ -275,18 +354,25 @@ export default function ProfileSettingsPage() {
         "Failed to delete account.";
 
       if (code === "ACTIVE_SUBSCRIPTION") {
+        setNoticeTone("warning");
         setNotice("Active subscription found. Cancel it from Billing before deleting your account.");
       } else if (code === "LAST_OWNER_OF_SHARED_ORG") {
+        setNoticeTone("warning");
         setNotice("Transfer ownership of your shared organization before deleting your account.");
       } else if (code === "GOOGLE_REAUTH_REQUIRED") {
+        setNoticeTone("warning");
         setNotice("Google-only accounts cannot be deleted from self-serve settings yet.");
       } else if (code === "PASSWORD_CONFIRMATION_FAILED") {
+        setNoticeTone("error");
         setNotice("Incorrect password. Please try again.");
       } else if (code === "DELETE_CONFIRMATION_MISMATCH") {
+        setNoticeTone("error");
         setNotice("Type DELETE to confirm account deletion.");
       } else if (typeof message === "string" && message.trim()) {
+        setNoticeTone("error");
         setNotice(message);
       } else {
+        setNoticeTone("error");
         setNotice("Failed to delete account.");
       }
     } finally {
@@ -321,7 +407,15 @@ export default function ProfileSettingsPage() {
         </div>
 
         {notice ? (
-          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
+          <div
+            className={`rounded-lg px-4 py-3 text-sm ${
+              noticeTone === "error"
+                ? "border border-rose-500/30 bg-rose-500/10 text-rose-200"
+                : noticeTone === "warning"
+                  ? "border border-amber-500/30 bg-amber-500/10 text-amber-100"
+                  : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+            }`}
+          >
             {notice}
           </div>
         ) : null}
@@ -548,6 +642,11 @@ export default function ProfileSettingsPage() {
           <p className="text-xs text-slate-500">
             Shared organizations require ownership transfer before deletion.
           </p>
+          {hasBlockingSubscription ? (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              Active subscription found. Cancel it from Billing before deleting your account.
+            </div>
+          ) : null}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-slate-400 mb-1">Current password</label>
@@ -570,7 +669,7 @@ export default function ProfileSettingsPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
-            <Button variant="danger" onClick={handleDeleteAccount} disabled={deleteAccountBusy}>
+            <Button variant="danger" onClick={handleDeleteAccount} disabled={!canSubmitDeleteAccount}>
               {deleteAccountBusy ? "Deleting..." : "Delete account"}
             </Button>
             <Button variant="outline" onClick={() => router.push("/settings/billing")}>
