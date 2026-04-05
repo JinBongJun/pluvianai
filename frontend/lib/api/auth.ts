@@ -114,4 +114,13 @@ export const authAPI = {
     const response = await apiClient.get("/auth/me/usage");
     return response.data;
   },
+
+  getDefaultWorkspace: async (): Promise<{
+    path: string;
+    organization_id: number | null;
+    project_id: number | null;
+  }> => {
+    const response = await apiClient.get("/auth/me/default-workspace");
+    return response.data;
+  },
 };

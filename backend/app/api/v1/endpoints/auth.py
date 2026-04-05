@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.core.config import settings
 from app.core.database import get_db
@@ -49,8 +50,10 @@ from app.core.dependencies import get_user_service, get_audit_service
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 from app.models.user import User
 from app.models.login_attempt import LoginAttempt
-from app.models.organization import Organization
+from app.models.organization import Organization, OrganizationMember
+from app.models.project import Project
 from app.models.refresh_token import RefreshToken
+from app.middleware.usage_middleware import check_organization_limit, check_project_limit
 from app.services.brute_force_protection import brute_force_service
 from app.services.risk_based_auth import risk_based_auth_service
 from app.services.password_policy import password_policy_service
@@ -68,6 +71,8 @@ from app.utils.privacy import mask_email
 router = APIRouter()
 ACCESS_COOKIE_NAME = "access_token"
 REFRESH_COOKIE_NAME = "refresh_token"
+DEFAULT_BOOTSTRAP_ORG_NAME = "My Organization"
+DEFAULT_BOOTSTRAP_PROJECT_NAME = "My First Project"
 
 
 def _token_max_age_seconds(token: str, fallback_seconds: int) -> int:
@@ -213,6 +218,157 @@ def _ensure_user_agreement(user: User, db: Session) -> None:
     )
 
 
+def _find_first_owned_org(user_id: int, db: Session) -> Organization | None:
+    return (
+        db.query(Organization)
+        .filter(
+            Organization.owner_id == user_id,
+            Organization.is_deleted.is_(False),
+        )
+        .order_by(Organization.id.asc())
+        .first()
+    )
+
+
+def _find_first_project_in_org(user_id: int, org_id: int, db: Session) -> Project | None:
+    return (
+        db.query(Project)
+        .filter(
+            Project.owner_id == user_id,
+            Project.organization_id == org_id,
+            Project.is_active.is_(True),
+            Project.is_deleted.is_(False),
+        )
+        .order_by(Project.id.asc())
+        .first()
+    )
+
+
+def _next_available_org_name(user_id: int, db: Session, base_name: str) -> str:
+    existing_names = {
+        str(name)
+        for (name,) in db.query(Organization.name)
+        .filter(
+            Organization.owner_id == user_id,
+            Organization.is_deleted.is_(False),
+        )
+        .all()
+        if name
+    }
+    if base_name not in existing_names:
+        return base_name
+
+    idx = 2
+    while True:
+        candidate = f"{base_name} {idx}"
+        if candidate not in existing_names:
+            return candidate
+        idx += 1
+
+
+def _next_available_project_name(user_id: int, db: Session, base_name: str) -> str:
+    existing_names = {
+        str(name)
+        for (name,) in db.query(Project.name)
+        .filter(
+            Project.owner_id == user_id,
+            Project.is_deleted.is_(False),
+        )
+        .all()
+        if name
+    }
+    if base_name not in existing_names:
+        return base_name
+
+    idx = 2
+    while True:
+        candidate = f"{base_name} {idx}"
+        if candidate not in existing_names:
+            return candidate
+        idx += 1
+
+
+def _bootstrap_default_workspace_for_signup(user_id: int, db: Session) -> dict:
+    result = {
+        "organization_id": None,
+        "project_id": None,
+        "organization_created": False,
+        "project_created": False,
+        "reason": "ok",
+    }
+    try:
+        with db.begin_nested():
+            org = _find_first_owned_org(user_id, db)
+            if org is None:
+                can_create_org, _ = check_organization_limit(user_id, db, is_superuser=False)
+                if not can_create_org:
+                    result["reason"] = "organization_limit_reached"
+                    return result
+
+                org = Organization(
+                    name=_next_available_org_name(user_id, db, DEFAULT_BOOTSTRAP_ORG_NAME),
+                    owner_id=user_id,
+                    plan_type="free",
+                    description=None,
+                )
+                db.add(org)
+                db.flush()
+                db.add(
+                    OrganizationMember(
+                        organization_id=org.id,
+                        user_id=user_id,
+                        role="owner",
+                    )
+                )
+                result["organization_created"] = True
+
+            result["organization_id"] = org.id
+
+            project = _find_first_project_in_org(user_id, int(org.id), db)
+            if project is None:
+                can_create_project, _ = check_project_limit(user_id, db, is_superuser=False)
+                if not can_create_project:
+                    result["reason"] = "project_limit_reached"
+                    return result
+
+                project = Project(
+                    name=_next_available_project_name(
+                        user_id, db, DEFAULT_BOOTSTRAP_PROJECT_NAME
+                    ),
+                    owner_id=user_id,
+                    description=None,
+                    is_active=True,
+                    organization_id=org.id,
+                    usage_mode="full",
+                )
+                db.add(project)
+                db.flush()
+                result["project_created"] = True
+
+            result["project_id"] = project.id
+        return result
+    except SQLAlchemyError as exc:
+        logger.warning(
+            "Signup workspace bootstrap failed",
+            extra={"user_id": user_id, "error": str(exc)},
+            exc_info=True,
+        )
+        result["reason"] = "bootstrap_failed"
+        return result
+
+
+def _get_default_workspace_redirect(user_id: int, db: Session) -> tuple[str, int | None, int | None]:
+    org = _find_first_owned_org(user_id, db)
+    if not org:
+        return "/organizations", None, None
+
+    project = _find_first_project_in_org(user_id, int(org.id), db)
+    if not project:
+        return f"/organizations/{org.id}/projects", int(org.id), None
+
+    return f"/organizations/{org.id}/projects/{project.id}", int(org.id), int(project.id)
+
+
 class UserCreate(BaseModel):
     """User registration schema"""
 
@@ -346,6 +502,13 @@ async def register(
                 )
         except Exception as e:
             logger.warning(f"Failed to send signup verification email: {e}", exc_info=True)
+
+        bootstrap_result = _bootstrap_default_workspace_for_signup(user.id, db)
+        if bootstrap_result.get("reason") != "ok":
+            logger.info(
+                "Signup workspace bootstrap skipped",
+                extra={"user_id": user.id, "reason": bootstrap_result.get("reason")},
+            )
         
         return user
     except EntityAlreadyExistsError as e:
@@ -477,6 +640,14 @@ async def google_oauth_callback(
         user.primary_auth_provider = "google"
     elif user.primary_auth_provider not in {"password", "google"}:
         user.primary_auth_provider = "password"
+
+    if created:
+        bootstrap_result = _bootstrap_default_workspace_for_signup(user.id, db)
+        if bootstrap_result.get("reason") != "ok":
+            logger.info(
+                "Google signup workspace bootstrap skipped",
+                extra={"user_id": user.id, "reason": bootstrap_result.get("reason")},
+            )
 
     redirect = _redirect_to_frontend(next_path)
     _clear_oauth_state_cookie(redirect)
@@ -894,6 +1065,19 @@ async def resend_verification_email(
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information"""
     return current_user
+
+
+@router.get("/me/default-workspace")
+async def get_default_workspace(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    path, organization_id, project_id = _get_default_workspace_redirect(current_user.id, db)
+    return {
+        "path": path,
+        "organization_id": organization_id,
+        "project_id": project_id,
+    }
 
 
 @router.get("/me/usage")

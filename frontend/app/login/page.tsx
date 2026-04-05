@@ -221,11 +221,23 @@ export default function LoginPage() {
 
     try {
       await authAPI.login(email, rawPassword);
+      let targetPath = postAuthRedirect;
+      if (postAuthRedirect === "/organizations") {
+        try {
+          const workspace = await authAPI.getDefaultWorkspace();
+          if (workspace?.path?.startsWith("/")) {
+            targetPath = workspace.path;
+          }
+        } catch (workspaceError) {
+          analytics.capture("default_workspace_lookup_failed", {
+            error:
+              workspaceError instanceof Error ? workspaceError.message : "unknown_workspace_error",
+          });
+        }
+      }
       start();
       analytics.capture("user_login", { method: "password" });
-      setTimeout(() => {
-        window.location.href = postAuthRedirect;
-      }, 400);
+      router.replace(targetPath);
     } catch (error) {
       setFormError(getAuthErrorMessage(error, "login"));
       setIsSubmitting(false);
