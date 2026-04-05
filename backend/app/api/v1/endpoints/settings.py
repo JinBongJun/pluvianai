@@ -6,9 +6,10 @@ import secrets
 import hashlib
 from typing import Optional, List
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict, EmailStr
+from app.core.config import settings as app_settings
 from app.core.database import get_db
 from app.core.security import (
     get_current_user,
@@ -19,10 +20,12 @@ from app.core.security import (
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.core.responses import success_response
+from app.core.dependencies import get_audit_service
 from app.models.user import User
 from app.models.notification_settings import NotificationSettings
 from app.models.api_key import APIKey
 from app.services.email_verification_service import EmailVerificationService
+from app.services.account_deletion_service import AccountDeletionService, AccountDeletionBlocked
 
 router = APIRouter()
 
@@ -50,6 +53,7 @@ class UpdateProfileRequest(BaseModel):
 class DeleteAccountRequest(BaseModel):
     """Delete account request"""
     password: str
+    confirmation_text: str
 
 
 class ChangePasswordRequest(BaseModel):
@@ -129,6 +133,13 @@ def _generate_api_key_pair() -> tuple[str, str]:
     return raw_api_key, key_hash
 
 
+def _clear_auth_cookies(response: Response) -> None:
+    cookie_domain = app_settings.AUTH_COOKIE_DOMAIN or None
+    response.delete_cookie("access_token", path="/", domain=cookie_domain)
+    response.delete_cookie("refresh_token", path="/", domain=cookie_domain)
+    response.delete_cookie("csrf_token", path="/", domain=cookie_domain)
+
+
 @router.get("/profile", response_model=ProfileResponse)
 @handle_errors
 async def get_profile(
@@ -187,29 +198,68 @@ async def update_profile(
 @handle_errors
 async def delete_account(
     request: DeleteAccountRequest,
+    response: Response,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
+    audit_service = Depends(get_audit_service),
 ):
-    """Delete user account (requires password confirmation)"""
+    """Soft-delete user account after subscription and ownership checks."""
     logger.info(f"User {current_user.id} requesting account deletion")
+
+    if (request.confirmation_text or "").strip().upper() != "DELETE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "DELETE_CONFIRMATION_MISMATCH",
+                "message": "Type DELETE to confirm account deletion.",
+            },
+        )
 
     if not bool(getattr(current_user, "password_login_enabled", True)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password confirmation is unavailable for Google-only accounts",
+            detail={
+                "code": "GOOGLE_REAUTH_REQUIRED",
+                "message": "Account deletion for Google-only accounts is not available from self-serve settings yet.",
+            },
         )
     
     # Verify password
     if not verify_password(request.password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid password"
+            detail={
+                "code": "PASSWORD_CONFIRMATION_FAILED",
+                "message": "Invalid password.",
+            },
         )
-    
-    # Delete user (cascade will handle related records)
-    db.delete(current_user)
-    # Note: get_db() dependency automatically commits, so db.commit() is not needed
+
+    deletion_service = AccountDeletionService(db)
+    try:
+        summary = deletion_service.delete_account(current_user)
+    except AccountDeletionBlocked as blocked:
+        raise HTTPException(
+            status_code=blocked.status_code,
+            detail={"code": blocked.code, "message": blocked.message},
+        )
+
+    try:
+        audit_service.log_action(
+            user_id=current_user.id,
+            action="user_account_deleted",
+            resource_type="user",
+            resource_id=current_user.id,
+            old_value={"is_active": True},
+            new_value={"is_active": False, **summary},
+            ip_address=http_request.client.host if http_request.client else None,
+            user_agent=http_request.headers.get("user-agent"),
+        )
+    except Exception:
+        logger.warning("Failed to log account deletion audit event", exc_info=True)
+
+    _clear_auth_cookies(response)
     
     logger.info(f"Account deleted for user {current_user.id}")
     return None
