@@ -221,10 +221,21 @@ export default function LoginPage() {
 
     try {
       await authAPI.login(email, rawPassword);
+      let targetPath = postAuthRedirect;
+      if (postAuthRedirect === "/organizations") {
+        try {
+          const workspace = await authAPI.getDefaultWorkspace();
+          if (workspace?.path?.startsWith("/")) {
+            targetPath = workspace.path;
+          }
+        } catch {
+          // Keep default redirect when lookup fails.
+        }
+      }
       start();
       analytics.capture("user_login", { method: "password" });
       setTimeout(() => {
-        window.location.href = postAuthRedirect;
+        window.location.href = targetPath;
       }, 400);
     } catch (error) {
       setFormError(getAuthErrorMessage(error, "login"));

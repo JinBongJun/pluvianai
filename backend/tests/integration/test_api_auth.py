@@ -7,9 +7,12 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from fastapi import status
 from app.models.email_verification_token import EmailVerificationToken
+from app.models.organization import Organization, OrganizationMember
+from app.models.project import Project
 from app.models.subscription import Subscription
 from app.models.usage import Usage
 from app.models.user import User
+from app.core.security import get_password_hash
 
 
 @pytest.mark.integration
@@ -59,6 +62,50 @@ class TestAuthAPI:
         assert "password" not in data  # Password should not be in response
         token = db.query(EmailVerificationToken).filter(EmailVerificationToken.email == "newuser@example.com").first()
         assert token is not None
+
+    async def test_register_bootstraps_default_workspace(self, async_client, db):
+        response = await async_client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "bootstrap-register@example.com",
+                "password": "securepassword123",
+                "full_name": "Bootstrap Register User",
+                "liability_agreement_accepted": True,
+            },
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        user_id = int(response.json()["id"])
+
+        org = (
+            db.query(Organization)
+            .filter(Organization.owner_id == user_id, Organization.is_deleted.is_(False))
+            .first()
+        )
+        assert org is not None
+
+        membership = (
+            db.query(OrganizationMember)
+            .filter(
+                OrganizationMember.organization_id == org.id,
+                OrganizationMember.user_id == user_id,
+            )
+            .first()
+        )
+        assert membership is not None
+        assert str(membership.role) == "owner"
+
+        project = (
+            db.query(Project)
+            .filter(
+                Project.owner_id == user_id,
+                Project.organization_id == org.id,
+                Project.is_active.is_(True),
+                Project.is_deleted.is_(False),
+            )
+            .first()
+        )
+        assert project is not None
     
     async def test_register_duplicate_email(self, async_client, test_user):
         """Test registering with duplicate email"""
@@ -231,6 +278,24 @@ class TestAuthAPI:
         assert user.password_login_enabled is False
         assert user.is_email_verified is True
 
+        org = (
+            db.query(Organization)
+            .filter(Organization.owner_id == user.id, Organization.is_deleted.is_(False))
+            .first()
+        )
+        assert org is not None
+        project = (
+            db.query(Project)
+            .filter(
+                Project.owner_id == user.id,
+                Project.organization_id == org.id,
+                Project.is_active.is_(True),
+                Project.is_deleted.is_(False),
+            )
+            .first()
+        )
+        assert project is not None
+
     async def test_google_oauth_callback_merges_existing_password_user(
         self, async_client, db, test_user, monkeypatch
     ):
@@ -304,6 +369,54 @@ class TestAuthAPI:
             },
         )
         assert login_res.status_code == status.HTTP_200_OK
+
+    async def test_get_default_workspace_returns_org_project_path(self, async_client, db):
+        user = User(
+            email="default-workspace@example.com",
+            hashed_password=get_password_hash("testpassword123"),
+            full_name="Default Workspace User",
+            is_active=True,
+            is_email_verified=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        org = Organization(
+            name="Default Workspace Org",
+            owner_id=user.id,
+            plan_type="free",
+        )
+        db.add(org)
+        db.flush()
+        db.add(OrganizationMember(organization_id=org.id, user_id=user.id, role="owner"))
+        db.add(
+            Project(
+                name="Default Workspace Project",
+                owner_id=user.id,
+                organization_id=org.id,
+                is_active=True,
+                is_deleted=False,
+                usage_mode="full",
+            )
+        )
+        db.commit()
+
+        login_res = await async_client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": user.email,
+                "password": "testpassword123",
+            },
+        )
+        assert login_res.status_code == status.HTTP_200_OK
+
+        target_res = await async_client.get("/api/v1/auth/me/default-workspace")
+        assert target_res.status_code == status.HTTP_200_OK
+        payload = target_res.json()
+        assert payload["organization_id"] == org.id
+        assert payload["project_id"] is not None
+        assert payload["path"] == f"/organizations/{org.id}/projects/{payload['project_id']}"
     
     async def test_login_invalid_credentials(self, async_client, test_user):
         """Test login with invalid credentials"""
