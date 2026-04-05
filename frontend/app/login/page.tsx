@@ -221,23 +221,9 @@ export default function LoginPage() {
 
     try {
       await authAPI.login(email, rawPassword);
-      let targetPath = postAuthRedirect;
-      if (postAuthRedirect === "/organizations") {
-        try {
-          const workspace = await authAPI.getDefaultWorkspace();
-          if (workspace?.path?.startsWith("/")) {
-            targetPath = workspace.path;
-          }
-        } catch (workspaceError) {
-          analytics.capture("default_workspace_lookup_failed", {
-            error:
-              workspaceError instanceof Error ? workspaceError.message : "unknown_workspace_error",
-          });
-        }
-      }
       start();
       analytics.capture("user_login", { method: "password" });
-      router.replace(targetPath);
+      router.replace(postAuthRedirect);
     } catch (error) {
       setFormError(getAuthErrorMessage(error, "login"));
       setIsSubmitting(false);
@@ -280,10 +266,20 @@ export default function LoginPage() {
     try {
       await authAPI.register(email, rawPassword, fullName, accepted);
       analytics.capture("user_register", { method: "password" });
+      let targetPath = "/organizations";
+      try {
+        const workspace = await authAPI.getDefaultWorkspace();
+        if (workspace?.path?.startsWith("/")) {
+          targetPath = workspace.path;
+        }
+      } catch (workspaceError) {
+        analytics.capture("default_workspace_lookup_failed_after_register", {
+          error:
+            workspaceError instanceof Error ? workspaceError.message : "unknown_workspace_error",
+        });
+      }
       start();
-      setTimeout(() => {
-        router.push(`/login?registered=1&email=${encodeURIComponent(email)}`);
-      }, 800);
+      router.replace(targetPath);
     } catch (error) {
       setFormError(getAuthErrorMessage(error, "register"));
       setIsSubmitting(false);
