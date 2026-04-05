@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   Box,
@@ -26,6 +26,8 @@ export function ReleaseGateSelectedAgentSurface({
   rgDetails: ReleaseGateMapRgDetails | null;
 }) {
   const evalListScrollRef = useRef<HTMLUListElement | null>(null);
+  const [surfaceTab, setSurfaceTab] = useState<"run" | "configure">("run");
+  const [payloadOpen, setPayloadOpen] = useState(false);
   const surfacePhase = getReleaseGateSelectedAgentSurfacePhase(rgDetails);
   const handleEvalListWheel = useCallback((e: React.WheelEvent) => {
     const el = evalListScrollRef.current;
@@ -220,154 +222,315 @@ export function ReleaseGateSelectedAgentSurface({
           </button>
         </div>
 
-        <div className="flex flex-1 min-h-0 gap-6 px-5 py-5">
-          <div className="flex w-[280px] shrink-0 flex-col min-h-0 border-r border-white/[0.05] pr-5">
-            <div className="mb-5 flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/40">
-              <ShieldCheck className="h-4 w-4 text-emerald-500/70" />
-              Eval Checks
+        <div className="flex shrink-0 gap-1 border-b border-white/[0.06] px-5 pt-2">
+          {(
+            [
+              ["run", "Run"],
+              ["configure", "Configure"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSurfaceTab(id)}
+              className={clsx(
+                "relative px-4 py-2.5 text-sm font-semibold transition-colors",
+                surfaceTab === id
+                  ? "text-white"
+                  : "text-slate-500 hover:text-slate-300"
+              )}
+            >
+              {label}
+              {surfaceTab === id ? (
+                <span className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-fuchsia-500/90" />
+              ) : null}
+            </button>
+          ))}
+        </div>
+
+        {(startBlockedReason || runError) && (
+          <div className="shrink-0 border-b border-white/[0.06] px-5 py-3">
+            <div
+              className={clsx(
+                "rounded-xl border px-4 py-3 text-[13px] font-medium leading-relaxed",
+                runError
+                  ? "border-rose-500/40 bg-rose-500/[0.08] text-rose-100"
+                  : "border-amber-500/40 bg-amber-500/[0.08] text-amber-100"
+              )}
+            >
+              {runError || startBlockedReason}
             </div>
-            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar" onWheel={handleEvalListWheel}>
-              {Array.isArray(resolvedDetails.activeChecksCards) &&
-              resolvedDetails.activeChecksCards.length > 0 ? (
-                <ul ref={evalListScrollRef} className="space-y-4">
-                  {resolvedDetails.activeChecksCards.map(card => (
-                    <li key={card.id} className="flex flex-col gap-1.5">
-                      <div className="flex items-center gap-2.5">
+          </div>
+        )}
+
+        {surfaceTab === "run" ? (
+          <div className="flex flex-1 min-h-0 flex-col gap-4 px-5 py-5">
+            <p className="shrink-0 text-center text-[11px] font-medium uppercase tracking-[0.2em] text-slate-500">
+              ① Pick inputs (side panels) → ② Review below → ③ Start
+            </p>
+            <div className="flex min-h-0 flex-1 gap-6">
+              <div className="flex w-[240px] shrink-0 flex-col min-h-0 border-r border-white/[0.05] pr-5">
+                <div className="mb-3 flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/40">
+                  <ShieldCheck className="h-4 w-4 text-emerald-500/70" />
+                  Eval (summary)
+                </div>
+                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar text-sm text-white/70">
+                  {Array.isArray(resolvedDetails.activeChecksCards) &&
+                  resolvedDetails.activeChecksCards.length > 0 ? (
+                    <ul className="space-y-2">
+                      {resolvedDetails.activeChecksCards.slice(0, 4).map(card => (
+                        <li key={card.id} className="flex items-start gap-2">
+                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400/90" />
+                          <span className="line-clamp-2 text-[12px] font-medium leading-snug text-white/85">
+                            {card.label}
+                          </span>
+                        </li>
+                      ))}
+                      {resolvedDetails.activeChecksCards.length > 4 ? (
+                        <li className="text-[11px] text-slate-500">
+                          +{resolvedDetails.activeChecksCards.length - 4} more in Configure
+                        </li>
+                      ) : null}
+                    </ul>
+                  ) : Array.isArray(resolvedDetails.activeChecks) && resolvedDetails.activeChecks.length > 0 ? (
+                    <ul className="space-y-2">
+                      {resolvedDetails.activeChecks.slice(0, 4).map((name, i) => (
+                        <li key={`${name}-${i}`} className="flex items-center gap-2">
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400/90" />
+                          <span className="truncate text-[12px] font-medium text-white/85">
+                            {name.replace(/_/g, " ")}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-white/35">No checks configured.</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSurfaceTab("configure")}
+                  className="mt-4 shrink-0 text-left text-[12px] font-semibold text-fuchsia-300/90 underline-offset-2 hover:text-fuchsia-200 hover:underline"
+                >
+                  Edit all eval &amp; policy checks →
+                </button>
+              </div>
+
+              <div className="flex min-w-0 flex-1 flex-col min-h-0 gap-3">
+                <div className="flex shrink-0 items-center justify-between gap-3">
+                  <div className="text-xs font-black uppercase tracking-[0.2em] text-white/40">
+                    This run
+                  </div>
+                  {configSourceLabel ? (
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-white/70">
+                      {configSourceLabel}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">Model</div>
+                    <div className="mt-1 truncate text-white/90" title={modelLabel}>
+                      {modelLabel}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">Provider</div>
+                    <div className="mt-1 truncate text-white/90" title={providerLabel}>
+                      {providerLabel}
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-white/[0.02] px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">System prompt</div>
+                  <p
+                    className="mt-1 line-clamp-3 text-[11px] leading-relaxed text-white/90"
+                    title={promptPreview || "No system prompt configured."}
+                  >
+                    {promptPreview || "No system prompt configured."}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-1.5 text-[11px] text-white/80">
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-1.5">
+                    <span className="text-white/40">Sampling:</span>{" "}
+                    {samplingSummaryText || "Using provider defaults"}
+                  </div>
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-1.5">
+                    <span className="text-white/40">Tools:</span> {toolsSummaryText || "No tools configured"}
+                  </div>
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-1.5">
+                    <span className="text-white/40">Override:</span>{" "}
+                    {overrideSummaryText || "Using detected model"}
+                  </div>
+                </div>
+                <div className="mt-auto shrink-0 border-t border-white/5 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setPayloadOpen(o => !o)}
+                    className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-white/50 transition hover:bg-white/[0.06]"
+                  >
+                    Payload (raw)
+                    <ChevronDown className={clsx("h-4 w-4 transition-transform", payloadOpen && "rotate-180")} />
+                  </button>
+                  {payloadOpen ? (
+                    <pre className="mt-2 max-h-[180px] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-white/5 bg-black/30 p-3 font-mono text-[10px] leading-relaxed text-white/55 custom-scrollbar">
+                      {String(rgConfig.originalPayloadPreview || "{}")}
+                    </pre>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-1 min-h-0 gap-6 px-5 py-5">
+            <div className="flex w-[280px] shrink-0 flex-col min-h-0 border-r border-white/[0.05] pr-5">
+              <div className="mb-5 flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/40">
+                <ShieldCheck className="h-4 w-4 text-emerald-500/70" />
+                Eval Checks
+              </div>
+              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar" onWheel={handleEvalListWheel}>
+                {Array.isArray(resolvedDetails.activeChecksCards) &&
+                resolvedDetails.activeChecksCards.length > 0 ? (
+                  <ul ref={evalListScrollRef} className="space-y-4">
+                    {resolvedDetails.activeChecksCards.map(card => (
+                      <li key={card.id} className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2.5">
+                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                          <span className="truncate text-[13px] font-semibold tracking-wide text-white/90">
+                            {card.label}
+                          </span>
+                        </div>
+                        {card.params ? (
+                          <div className="pl-[26px]">
+                            <span className="line-clamp-2 rounded-md bg-white/[0.02] px-2 py-1 font-mono text-xs text-white/40">
+                              {card.params}
+                            </span>
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : Array.isArray(resolvedDetails.activeChecks) &&
+                  resolvedDetails.activeChecks.length > 0 ? (
+                  <ul ref={evalListScrollRef} className="space-y-3">
+                    {resolvedDetails.activeChecks.map((name, i) => (
+                      <li key={`${name}-${i}`} className="flex items-center gap-2.5">
                         <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
                         <span className="truncate text-[13px] font-semibold tracking-wide text-white/90">
-                          {card.label}
+                          {name.replace(/_/g, " ")}
                         </span>
-                      </div>
-                      {card.params ? (
-                        <div className="pl-[26px]">
-                          <span className="line-clamp-2 rounded-md bg-white/[0.02] px-2 py-1 font-mono text-xs text-white/40">
-                            {card.params}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-white/5 p-4 text-sm text-white/40">
+                    No active checks configured.
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 shrink-0">
+                <div className="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/40">
+                  <ShieldCheck className="h-3.5 w-3.5 text-amber-400/70" />
+                  Policy Checks
+                </div>
+                {Array.isArray(resolvedDetails.policyCheckCards) &&
+                resolvedDetails.policyCheckCards.length > 0 ? (
+                  <ul className="space-y-3">
+                    {resolvedDetails.policyCheckCards.map(card => (
+                      <li key={card.id} className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2.5">
+                          <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-300" />
+                          <span className="truncate text-[13px] font-semibold tracking-wide text-white/90">
+                            {card.label}
                           </span>
                         </div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : Array.isArray(resolvedDetails.activeChecks) &&
-                resolvedDetails.activeChecks.length > 0 ? (
-                <ul ref={evalListScrollRef} className="space-y-3">
-                  {resolvedDetails.activeChecks.map((name, i) => (
-                    <li key={`${name}-${i}`} className="flex items-center gap-2.5">
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                      <span className="truncate text-[13px] font-semibold tracking-wide text-white/90">
-                        {name.replace(/_/g, " ")}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="rounded-xl border border-dashed border-white/5 p-4 text-sm text-white/40">
-                  No active checks configured.
-                </p>
-              )}
-            </div>
-
-            <div className="mt-6 shrink-0">
-              <div className="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/40">
-                <ShieldCheck className="h-3.5 w-3.5 text-amber-400/70" />
-                Policy Checks
+                        {card.detail ? (
+                          <div className="pl-[26px]">
+                            <span className="line-clamp-2 rounded-md bg-white/[0.02] px-2 py-1 text-xs text-white/40">
+                              {card.detail}
+                            </span>
+                          </div>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-white/5 px-3 py-2 text-xs text-white/40">
+                    No policy checks enabled.
+                  </p>
+                )}
               </div>
-              {Array.isArray(resolvedDetails.policyCheckCards) &&
-              resolvedDetails.policyCheckCards.length > 0 ? (
-                <ul className="space-y-3">
-                  {resolvedDetails.policyCheckCards.map(card => (
-                    <li key={card.id} className="flex flex-col gap-1.5">
-                      <div className="flex items-center gap-2.5">
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-300" />
-                        <span className="truncate text-[13px] font-semibold tracking-wide text-white/90">
-                          {card.label}
-                        </span>
-                      </div>
-                      {card.detail ? (
-                        <div className="pl-[26px]">
-                          <span className="line-clamp-2 rounded-md bg-white/[0.02] px-2 py-1 text-xs text-white/40">
-                            {card.detail}
-                          </span>
-                        </div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="rounded-xl border border-dashed border-white/5 px-3 py-2 text-xs text-white/40">
-                  No policy checks enabled.
-                </p>
-              )}
             </div>
-          </div>
 
-          <div className="flex min-w-0 flex-1 flex-col min-h-0">
-            <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-white/40">
-                Config Summary
+            <div className="flex min-w-0 flex-1 flex-col min-h-0">
+              <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-white/40">
+                  Config Summary
+                </div>
+                {configSourceLabel ? (
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-white/70">
+                    {configSourceLabel}
+                  </span>
+                ) : null}
               </div>
-              {configSourceLabel ? (
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-white/70">
-                  {configSourceLabel}
-                </span>
-              ) : null}
-            </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-4">
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div className="rounded-lg bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
-                  <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">Model</div>
-                  <div className="mt-1 truncate text-white/90" title={modelLabel}>
-                    {modelLabel}
+              <div className="flex min-h-0 flex-1 flex-col gap-4">
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
+                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">Model</div>
+                    <div className="mt-1 truncate text-white/90" title={modelLabel}>
+                      {modelLabel}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
+                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">
+                      Provider
+                    </div>
+                    <div className="mt-1 truncate text-white/90" title={providerLabel}>
+                      {providerLabel}
+                    </div>
                   </div>
                 </div>
+
                 <div className="rounded-lg bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
                   <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">
-                    Provider
+                    System prompt
                   </div>
-                  <div className="mt-1 truncate text-white/90" title={providerLabel}>
-                    {providerLabel}
+                  <p
+                    className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-white/90"
+                    title={promptPreview || "No system prompt configured."}
+                  >
+                    {promptPreview || "No system prompt configured."}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 text-[11px]">
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 text-white/80 transition-colors hover:bg-white/[0.04]">
+                    <span className="text-white/40">Sampling:</span>{" "}
+                    {samplingSummaryText || "Using provider defaults"}
+                  </div>
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 text-white/80 transition-colors hover:bg-white/[0.04]">
+                    <span className="text-white/40">Tools:</span> {toolsSummaryText || "No tools configured"}
+                  </div>
+                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 text-white/80 transition-colors hover:bg-white/[0.04]">
+                    <span className="text-white/40">Override:</span>{" "}
+                    {overrideSummaryText || "Using detected model"}
                   </div>
                 </div>
-              </div>
 
-              <div className="rounded-lg bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
-                <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">
-                  System prompt
+                <div className="flex min-h-0 flex-1 flex-col border-t border-white/5 pt-3">
+                  <div className="mb-1 text-[10px] uppercase tracking-[0.15em] text-white/40">
+                    Payload (raw preview)
+                  </div>
+                  <pre className="h-full min-h-[120px] overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-white/60 custom-scrollbar">
+                    {String(rgConfig.originalPayloadPreview || "{}")}
+                  </pre>
                 </div>
-                <p
-                  className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-white/90"
-                  title={promptPreview || "No system prompt configured."}
-                >
-                  {promptPreview || "No system prompt configured."}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2 text-[11px]">
-                <div className="rounded-lg bg-white/[0.02] px-3 py-2 text-white/80 transition-colors hover:bg-white/[0.04]">
-                  <span className="text-white/40">Sampling:</span>{" "}
-                  {samplingSummaryText || "Using provider defaults"}
-                </div>
-                <div className="rounded-lg bg-white/[0.02] px-3 py-2 text-white/80 transition-colors hover:bg-white/[0.04]">
-                  <span className="text-white/40">Tools:</span> {toolsSummaryText || "No tools configured"}
-                </div>
-                <div className="rounded-lg bg-white/[0.02] px-3 py-2 text-white/80 transition-colors hover:bg-white/[0.04]">
-                  <span className="text-white/40">Override:</span>{" "}
-                  {overrideSummaryText || "Using detected model"}
-                </div>
-              </div>
-
-              <div className="flex min-h-0 flex-1 flex-col border-t border-white/5 pt-3">
-                <div className="mb-1 text-[10px] uppercase tracking-[0.15em] text-white/40">
-                  Payload (raw preview)
-                </div>
-                <pre className="h-full overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-white/60 custom-scrollbar">
-                  {String(rgConfig.originalPayloadPreview || "{}")}
-                </pre>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="flex shrink-0 items-center justify-between gap-4 border-t border-white/[0.08] bg-black/20 px-6 pb-6 pt-5 shadow-[0_-14px_30px_rgba(0,0,0,0.18)] backdrop-blur-xl">
           <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -392,25 +555,6 @@ export function ReleaseGateSelectedAgentSurface({
                 {lastRunStatusLabel}
                 {rgConfig.lastRunWallMs ? ` (${(rgConfig.lastRunWallMs / 1000).toFixed(1)}s)` : ""}
               </span>
-            ) : null}
-            {startBlockedReason ? (
-              <div className="min-w-0 flex-1">
-                <div
-                  className="truncate border-l-2 border-amber-500/50 bg-amber-500/5 px-3 py-2 text-[13px] font-medium text-amber-100/90"
-                  title={startBlockedReason}
-                >
-                  {startBlockedReason}
-                </div>
-              </div>
-            ) : runError ? (
-              <div className="min-w-0 flex-1">
-                <div
-                  className="truncate border-l-2 border-rose-500/50 bg-rose-500/5 px-3 py-2 text-[13px] font-medium text-rose-100"
-                  title={runError}
-                >
-                  {runError}
-                </div>
-              </div>
             ) : null}
           </div>
 
