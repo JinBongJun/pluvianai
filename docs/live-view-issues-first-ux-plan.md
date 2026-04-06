@@ -449,3 +449,193 @@ After this change, Live View should read as:
 It should no longer read as:
 
 `Here is a table of internal logs and diagnostics.`
+
+## Large Snapshot Handling
+
+Live View must not try to load every snapshot for a node at once.
+
+Reason:
+
+- plan limits can be large enough to make full-list loading unrealistic
+- Live View is a recent-first triage surface, not a full archive browser
+- rendering thousands of rows at once would increase network cost, client memory, filter latency, and selection-state complexity
+
+### Product Rule
+
+Use recent-first append pagination.
+
+Default behavior:
+
+- load only the most recent page
+- let users request older pages explicitly
+- keep the initial page fast and focused on recent incidents
+
+This means:
+
+- first page = recent snapshots only
+- more history = `Load older`
+- never offer `Load all`
+
+### Backend Contract
+
+The existing snapshots list API already supports the required pagination shape.
+
+Use:
+
+- `limit`
+- `offset`
+- `total_count`
+
+Do not change the backend API in phase 1.
+
+Phase 1 should only change frontend state management and UX.
+
+### Frontend Model
+
+Treat the current `Show 30 / 50 / 100 / 200` control as page size, not total list size.
+
+Required state:
+
+- `pageSize`
+- `loadedSnapshots`
+- `totalSnapshots`
+- `isLoadingMore`
+- `hasMore`
+- `loadMoreError`
+
+Behavior:
+
+- first request:
+  - `limit = pageSize`
+  - `offset = 0`
+- `Load older` request:
+  - `limit = pageSize`
+  - `offset = loadedSnapshots.length`
+
+### Merge Rules
+
+Appending older pages must not create duplicate rows.
+
+Required merge rule:
+
+- dedupe by snapshot `id`
+
+Required ordering rule:
+
+- keep server recency ordering
+- apply the existing UI filter/sort layer on top of the loaded set
+
+### Polling Rule
+
+Polling must only refresh the newest page.
+
+Do not re-fetch every previously loaded page.
+
+Safe merge behavior:
+
+1. refresh the first page
+2. merge it into `loadedSnapshots`
+3. keep previously loaded older pages
+4. dedupe by `id`
+
+This keeps recent data fresh without erasing older pages the user already loaded.
+
+### Reset Rules
+
+Reset pagination state when:
+
+- `projectId` changes
+- `agentId` changes
+- `pageSize` changes
+
+Do not reset pagination state when:
+
+- risk/status filter changes
+- sort mode changes
+
+Those should only re-derive the currently loaded set.
+
+### Toolbar Copy
+
+The toolbar should tell the truth about partial loading.
+
+Recommended copy:
+
+- `Showing 200 of 10,000 snapshots`
+- `Recent snapshots first`
+
+If needed, add a small secondary note:
+
+- `Sorting applies to loaded snapshots`
+
+### Bottom Pagination UI
+
+Add a dedicated bottom pagination control.
+
+Recommended states:
+
+- `Load older`
+- `Loading older snapshots...`
+- `Loaded 200 of 10,000`
+- `All snapshots loaded`
+- `Could not load older snapshots`
+
+This should be a list-footer control, not a floating action.
+
+### Delete And Selection Safety
+
+Selection and delete flows must stay consistent with append pagination.
+
+Rules:
+
+- deleting snapshots must remove them from `loadedSnapshots`
+- deleting snapshots must also remove them from selection state
+- after delete, revalidate the first page
+
+This prevents stale rows, stale counts, and ghost selections.
+
+### Non-Goals For Phase 1
+
+Do not add in phase 1:
+
+- cursor pagination
+- date-range filtering
+- full archive search
+- `Load all`
+- backend schema changes
+
+Those can be revisited later if usage proves they are necessary.
+
+### Safe Implementation Order
+
+1. keep the current first-page UX intact
+2. add accumulated snapshot state behind it
+3. add `Load older`
+4. dedupe and merge by `id`
+5. merge polling into the first page only
+6. integrate delete/selection cleanup
+7. update count copy in the toolbar
+
+### Validation Checklist
+
+Required checks before rollout:
+
+- first load still behaves like the current recent-only view
+- `Load older` appends without replacing the current list
+- duplicate rows do not appear
+- polling refreshes the latest page without dropping older loaded pages
+- delete removes rows and clears selection state correctly
+- changing page size resets the accumulated list correctly
+- switching project or agent resets the accumulated list correctly
+
+### Intended Outcome
+
+Even when a node has thousands of snapshots, Live View should still feel like:
+
+- a fast recent-first triage surface
+- a controlled history browser when needed
+
+It should not behave like:
+
+- an unbounded full-table dump
+- a page that attempts to render the entire archive at once
