@@ -8,6 +8,7 @@ type SortMode = "newest" | "oldest" | "latency_desc" | "latency_asc";
 
 export function LiveIssuesToolbar({
   visibleCount,
+  loadedCount,
   totalCount,
   recentTraceLimit,
   riskFilter,
@@ -33,6 +34,7 @@ export function LiveIssuesToolbar({
   onDeleteSelected,
 }: {
   visibleCount: number;
+  loadedCount: number;
   totalCount: number;
   recentTraceLimit: number;
   riskFilter: RiskFilter;
@@ -57,17 +59,30 @@ export function LiveIssuesToolbar({
   onOpenSaveModal: () => void;
   onDeleteSelected: () => void;
 }) {
+  const showingSummary =
+    totalCount > loadedCount
+      ? `Showing ${loadedCount} of ${totalCount} snapshots`
+      : `${loadedCount} of ${totalCount} snapshots`;
+
   return (
     <div className="flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e] p-5">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col items-start gap-1">
         <span className="rounded-md px-2 py-0.5 font-mono text-[13px] tracking-wide text-slate-400">
-          {visibleCount} of {totalCount} issues shown
+          {showingSummary}
         </span>
-        {totalCount > recentTraceLimit ? (
-          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium text-slate-400">
-            Limit {recentTraceLimit}
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2 pl-2">
+          <span className="text-[11px] font-medium text-slate-500">Recent snapshots first</span>
+          {totalCount > recentTraceLimit ? (
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium text-slate-400">
+              Page size {recentTraceLimit}
+            </span>
+          ) : null}
+          {totalCount > loadedCount ? (
+            <span className="text-[11px] font-medium text-slate-600">
+              Sorting applies to loaded snapshots
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-3">

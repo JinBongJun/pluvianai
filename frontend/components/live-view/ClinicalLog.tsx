@@ -16,6 +16,7 @@ import { getEnabledCheckIdsFromConfig, getEvalCheckLabel } from "@/lib/evalPrese
 import { getProjectPermissionToast } from "@/lib/projectAccess";
 import { LiveIssueRow } from "@/components/live-view/LiveIssueRow";
 import { LiveIssuesToolbar } from "@/components/live-view/LiveIssuesToolbar";
+import { LiveIssuesPagination } from "@/components/live-view/LiveIssuesPagination";
 import { LiveSaveToDatasetsModal } from "@/components/live-view/LiveSaveToDatasetsModal";
 import { buildLiveIssueRowModel } from "@/components/live-view/liveIssueRowModel";
 
@@ -309,6 +310,18 @@ function getRequestShapeBadges(snapshot: ClinicalSnapshot): Array<{ label: strin
   return badges;
 }
 
+function mergeSnapshotsById(...groups: ClinicalSnapshot[][]): ClinicalSnapshot[] {
+  const merged = new Map<string, ClinicalSnapshot>();
+  for (const group of groups) {
+    for (const snapshot of group) {
+      const id = String(snapshot.id);
+      if (merged.has(id)) continue;
+      merged.set(id, snapshot);
+    }
+  }
+  return Array.from(merged.values());
+}
+
 export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   projectId,
   agentId,
@@ -335,6 +348,9 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   const [newDatasetName, setNewDatasetName] = React.useState("");
   const [pollIntervalMs, setPollIntervalMs] = React.useState(CLINICAL_LOG_BASE_POLL_MS);
   const [planError, setPlanError] = React.useState<PlanLimitError | null>(null);
+  const [olderSnapshots, setOlderSnapshots] = React.useState<ClinicalSnapshot[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+  const [loadMoreError, setLoadMoreError] = React.useState<string | null>(null);
   const isPageVisible = usePageVisibility();
   const wasPageVisibleRef = React.useRef(isPageVisible);
 
@@ -446,10 +462,21 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     }
   };
 
-  const snapshots = React.useMemo(
+  const latestSnapshotsPage = React.useMemo(
     () => ((data?.items || []) as ClinicalSnapshot[]),
     [data?.items]
   );
+
+  const snapshots = React.useMemo(
+    () => mergeSnapshotsById(latestSnapshotsPage, olderSnapshots),
+    [latestSnapshotsPage, olderSnapshots]
+  );
+
+  React.useEffect(() => {
+    setOlderSnapshots([]);
+    setLoadMoreError(null);
+    setIsLoadingMore(false);
+  }, [projectId, agentId, recentTraceLimit]);
 
   React.useEffect(() => {
     // Collapse expanded card when filters/window change to avoid stale selection confusion.
@@ -457,9 +484,11 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   }, [riskFilter, recentTraceLimit, agentId]);
 
   const totalSnapshotsCount = React.useMemo(
-    () => Number(data?.total_count ?? data?.count ?? snapshots.length),
-    [data?.total_count, data?.count, snapshots.length]
+    () => Number(data?.total_count ?? data?.count ?? latestSnapshotsPage.length),
+    [data?.total_count, data?.count, latestSnapshotsPage.length]
   );
+  const loadedSnapshotsCount = snapshots.length;
+  const hasMoreSnapshots = loadedSnapshotsCount < totalSnapshotsCount;
 
   const activeDetailSnapshotId = detailModalId;
   // List uses light mode (no payload/long text); issue drawer / detail modal need full snapshot. Cache by (projectId, snapshotId).
@@ -685,7 +714,15 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
         deletedCount > 0 ? "success" : "info"
       );
       setSelectedRemoveIds(new Set());
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        for (const id of targetIds) next.delete(String(id));
+        return next;
+      });
       setIsRemoveMode(false);
+      setOlderSnapshots(prev =>
+        prev.filter(snapshot => !targetIds.includes(Number(snapshot.id)))
+      );
       if (detailModalId && targetIds.includes(Number(detailModalId))) {
         setDetailModalId(null);
       }
@@ -711,6 +748,27 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(visibleSnapshots.map(s => String(s.id))));
+    }
+  };
+
+  const loadOlderSnapshots = async () => {
+    if (!projectId || !agentId || isLoadingMore || !hasMoreSnapshots) return;
+    setIsLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const response = await liveViewAPI.listSnapshots(projectId, {
+        agent_id: agentId,
+        limit: recentTraceLimit,
+        offset: loadedSnapshotsCount,
+        light: true,
+      });
+      const nextItems = ((response?.items || []) as ClinicalSnapshot[]) ?? [];
+      setOlderSnapshots(prev => mergeSnapshotsById(prev, nextItems));
+    } catch (error) {
+      logger.error("Failed to load older snapshots", error);
+      setLoadMoreError("Could not load older snapshots");
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -892,6 +950,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     <div className="relative flex h-0 flex-1 min-h-0 flex-col overflow-hidden bg-[#111216]">
       <LiveIssuesToolbar
         visibleCount={visibleSnapshots.length}
+        loadedCount={loadedSnapshotsCount}
         totalCount={totalSnapshotsCount}
         recentTraceLimit={recentTraceLimit}
         riskFilter={riskFilter}
@@ -978,7 +1037,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
               <p className="text-sm font-medium text-slate-500 leading-relaxed">
                 {riskFilter === "all"
                   ? "No issues yet for this agent. New runs will appear here automatically."
-                  : `No issues match ${RISK_FILTER_LABELS[riskFilter]}. Try All or raise Show limit.`}
+                  : `No issues match ${RISK_FILTER_LABELS[riskFilter]}. Try All or load older snapshots.`}
               </p>
               {riskFilter !== "all" && (
                 <button
@@ -1046,6 +1105,16 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
                 );
               })}
             </div>
+          )}
+          {(snapshots.length > 0 || hasMoreSnapshots) && (
+            <LiveIssuesPagination
+              loadedCount={loadedSnapshotsCount}
+              totalCount={totalSnapshotsCount}
+              hasMore={hasMoreSnapshots}
+              isLoadingMore={isLoadingMore}
+              loadMoreError={loadMoreError}
+              onLoadMore={() => void loadOlderSnapshots()}
+            />
           )}
         </div>
       </div>
