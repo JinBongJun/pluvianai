@@ -63,6 +63,7 @@ export function LiveIssuesToolbar({
     totalCount > loadedCount
       ? `Showing ${loadedCount} of ${totalCount} snapshots`
       : `${loadedCount} of ${totalCount} snapshots`;
+  const hasPartiallyLoadedList = totalCount > loadedCount;
 
   return (
     <div className="flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e] p-5">
@@ -70,19 +71,11 @@ export function LiveIssuesToolbar({
         <span className="rounded-md px-2 py-0.5 font-mono text-[13px] tracking-wide text-slate-400">
           {showingSummary}
         </span>
-        <div className="flex items-center gap-2 pl-2">
-          <span className="text-[11px] font-medium text-slate-500">Recent snapshots first</span>
-          {totalCount > recentTraceLimit ? (
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium text-slate-400">
-              Page size {recentTraceLimit}
-            </span>
-          ) : null}
-          {totalCount > loadedCount ? (
-            <span className="text-[11px] font-medium text-slate-600">
-              Sorting applies to loaded snapshots
-            </span>
-          ) : null}
-        </div>
+        <span className="pl-2 text-[11px] font-medium text-slate-500">
+          {hasPartiallyLoadedList
+            ? "Recent snapshots first. Sorting applies to loaded snapshots."
+            : "Recent snapshots first."}
+        </span>
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-3">
