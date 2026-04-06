@@ -64,7 +64,7 @@ export function LiveIssueDetailDrawer({
       role="dialog"
       aria-modal="false"
       aria-labelledby="live-issue-drawer-title"
-      className="flex h-full w-[min(560px,calc(100%-3rem))] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#0f1014]/98 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+      className="flex h-full w-[min(500px,calc(100%-4rem))] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#0f1014]/98 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
     >
       <div className="flex items-start justify-between gap-4 border-b border-white/8 px-5 py-4">
         <div className="min-w-0">
@@ -87,7 +87,7 @@ export function LiveIssueDetailDrawer({
       <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 custom-scrollbar">
         <section className="space-y-2">
           <h3 className="text-xs font-medium text-slate-500">Case</h3>
-          <div className="rounded-2xl border border-white/6 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-200">
+          <div className="truncate rounded-2xl border border-white/6 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-200">
             {snapshot.request_prompt || snapshot.user_message || "No request text captured."}
           </div>
         </section>

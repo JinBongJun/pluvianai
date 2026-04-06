@@ -10,17 +10,22 @@ function mapFailedCheckToIssueTitle(failedEvalId?: string, failedEvalLabel?: str
   const normalized = String(failedEvalId || "")
     .trim()
     .toLowerCase();
+  const normalizedLabel = String(failedEvalLabel || "")
+    .trim()
+    .toLowerCase();
 
-  if (!normalized) return failedEvalLabel || null;
+  if (!normalized && !normalizedLabel) return failedEvalLabel || null;
 
-  if (normalized.includes("json")) return "Response format issue";
-  if (normalized.includes("empty") || normalized.includes("short")) return "Weak response";
-  if (normalized.includes("latency")) return "Slow response";
-  if (normalized.includes("http")) return "HTTP error";
-  if (normalized.includes("refusal") || normalized.includes("non_answer") || normalized.includes("non-answer")) {
+  const combined = `${normalized} ${normalizedLabel}`;
+
+  if (combined.includes("json")) return "Response format issue";
+  if (combined.includes("empty") || combined.includes("short")) return "Weak response";
+  if (combined.includes("latency")) return "Slow response";
+  if (combined.includes("http")) return "HTTP error";
+  if (combined.includes("refusal") || combined.includes("non_answer") || combined.includes("non-answer")) {
     return "Refusal or non-answer";
   }
-  if (normalized.includes("tool")) return "Tooling issue";
+  if (combined.includes("tool")) return "Tooling issue";
 
   return failedEvalLabel || failedEvalId || null;
 }

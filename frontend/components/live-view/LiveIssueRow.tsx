@@ -22,7 +22,6 @@ export function LiveIssueRow({
   surfaceStatus,
   toolDefinitionCount,
   captureStateBadge,
-  requestShapeBadges,
   failedCount,
   passedCount,
   actionHref,
@@ -49,6 +48,8 @@ export function LiveIssueRow({
   actionLabel: string;
   onToggleRow: () => void;
 }) {
+  const secondaryHint = captureStateBadge?.label || (toolDefinitionCount > 0 ? "Tool setup required" : null);
+
   return (
     <div
       key={id}
@@ -117,21 +118,16 @@ export function LiveIssueRow({
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-[14px] text-slate-300">{casePreview}</p>
-            <div className="mt-1 flex items-center gap-2 truncate text-[11px] text-slate-500">
-              <span>{surfaceStatus.reason}</span>
-              {toolDefinitionCount > 0 ? <span>· Tools configured</span> : null}
-              {captureStateBadge ? <span title={captureStateBadge.title}>· {captureStateBadge.label}</span> : null}
-              {requestShapeBadges.slice(0, 1).map(badge => (
-                <span key={badge.label} title={badge.title}>
-                  · {badge.label}
-                </span>
-              ))}
-            </div>
+            {secondaryHint ? (
+              <div className="mt-1 truncate text-[11px] text-slate-500" title={captureStateBadge?.title}>
+                {secondaryHint}
+              </div>
+            ) : null}
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-4">
-          <div className="w-[13rem] shrink-0">
+          <div className="w-[11rem] shrink-0">
             <div
               className={clsx(
                 "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold",
