@@ -960,14 +960,13 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
               ) : isRemoveMode ? (
                 <div className="w-8 shrink-0 text-center">DEL</div>
               ) : (
-                <div className="w-[14rem] shrink-0 capitalize">issue</div>
+                <div className="w-3 shrink-0" />
               )}
               <div className="flex-1 min-w-0 capitalize">case</div>
             </div>
 
             <div className="flex items-center gap-4 shrink-0 pr-2">
-              <div className="w-[13rem] shrink-0 capitalize">status</div>
-              <div className="w-[8rem] shrink-0 text-right capitalize">action</div>
+              <div className="w-[11rem] shrink-0 capitalize">status</div>
             </div>
           </div>
 
@@ -1005,17 +1004,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
                 // Simple analysis
                 const failedCount = getSnapshotFailedCount(s);
                 const passedCount = evalRows.filter(r => r.status === "pass").length;
-                const firstFailedEvalId = evalRows.find(r => r.status === "fail")?.id;
-                const actionHref =
-                  null;
-                const { issueTitle, casePreview, modelLabel, surfaceStatus, actionLabel } =
+                const { casePreview, modelLabel, surfaceStatus } =
                   buildLiveIssueRowModel({
                     requestText: s.request_prompt || s.user_message,
                     model: s.model,
-                    failedEvalId: firstFailedEvalId,
-                    failedEvalLabel: firstFailedEvalId
-                      ? getEvalCheckLabel(firstFailedEvalId, "Check failed")
-                      : undefined,
                     hasToolDefinitions: toolDefinitionCount > 0,
                     hasToolResults: Boolean(s.has_tool_results),
                     failedCount,
@@ -1027,23 +1019,18 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
                   <LiveIssueRow
                     key={s.id}
                     id={s.id}
-                    isExpanded={false}
                     isSelectMode={isSelectMode}
                     isRemoveMode={isRemoveMode}
                     isSelected={selectedIds.has(String(s.id))}
                     isRemoveSelected={selectedRemoveIds.has(String(s.id))}
-                    issueTitle={issueTitle}
                     fullTime={fullTime}
                     modelLabel={modelLabel}
                     casePreview={casePreview}
                     surfaceStatus={surfaceStatus}
                     toolDefinitionCount={toolDefinitionCount}
                     captureStateBadge={captureStateBadge}
-                    requestShapeBadges={requestShapeBadges}
                     failedCount={failedCount}
                     passedCount={passedCount}
-                    actionHref={actionHref}
-                    actionLabel={actionLabel}
                     onToggleRow={() => {
                       if (isSelectMode) {
                         toggleSelect(String(s.id));
