@@ -54,6 +54,8 @@ interface ClinicalSnapshot {
   request_context_meta?: RequestContextMeta | null;
   /** From list API: server-derived request shape summary */
   request_overview?: LiveViewRequestOverview | null;
+  /** From list/detail API: server-derived short preview of the captured end-user input. */
+  input_preview?: string | null;
 }
 
 interface ClinicalLogProps {
@@ -1006,7 +1008,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
                 const passedCount = evalRows.filter(r => r.status === "pass").length;
                 const { casePreview, modelLabel, surfaceStatus } =
                   buildLiveIssueRowModel({
-                    requestText: s.request_prompt || s.user_message,
+                    requestText: s.input_preview || s.request_prompt || s.user_message,
                     model: s.model,
                     hasToolDefinitions: toolDefinitionCount > 0,
                     hasToolResults: Boolean(s.has_tool_results),
