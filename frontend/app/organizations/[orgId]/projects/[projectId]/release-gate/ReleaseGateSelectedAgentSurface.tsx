@@ -79,9 +79,7 @@ export function ReleaseGateSelectedAgentSurface({
       return "Another Release Gate run is already in progress.";
     }
     if (rgConfig.keyIssueBlocked) {
-      return String(
-        rgConfig.keyRegistrationMessage || "Run blocked: API key not registered."
-      ).trim();
+      return "Register an OpenAI key to run this experiment.";
     }
     if (
       typeof rgConfig.selectedBaselineCount === "number" &&
@@ -234,6 +232,11 @@ export function ReleaseGateSelectedAgentSurface({
               <div className="mt-1 text-[13px] font-medium leading-relaxed">
                 {runError || startBlockedReason}
               </div>
+              {!runError && rgConfig.keyIssueBlocked ? (
+                <div className="mt-1 text-[12px] leading-relaxed text-current/80">
+                  Open Live View, select the node, then add the key in Settings {">"} API Keys.
+                </div>
+              ) : null}
             </div>
           </div>
         )}
@@ -245,10 +248,10 @@ export function ReleaseGateSelectedAgentSurface({
                 Run Experiment
               </p>
               <h3 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                Compare a candidate against selected production snapshots.
+                Run this setup against selected production snapshots.
               </h3>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Review the current setup below, then run the experiment.
+                Review the setup below, then run the experiment.
               </p>
             </div>
 
@@ -277,18 +280,18 @@ export function ReleaseGateSelectedAgentSurface({
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Candidate
+                      Test setup
                     </div>
                     <div className="mt-1 text-sm font-semibold text-white">
                       {resolvedDetails.model || "Unknown model"}
                     </div>
                     <p className="mt-1 text-sm leading-6 text-slate-400">
                       {providerLabel}
-                      <span className="px-1.5 text-white/25">?</span>
+                      <span className="px-1.5 text-white/25">·</span>
                       {toolsCount} tools
                       {configSourceLabel ? (
                         <>
-                          <span className="px-1.5 text-white/25">?</span>
+                          <span className="px-1.5 text-white/25">·</span>
                           {configSourceLabel}
                         </>
                       ) : null}
