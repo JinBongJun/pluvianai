@@ -104,6 +104,8 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
   const historyFiltersAreDefault =
     historyStatus === "all" && historyDatePreset === "all" && !historyTraceId.trim();
   const groupedHistoryItems = groupHistoryItemsBySession(nodeHistoryItems);
+  const latestResultCard = resultCards[0] ?? null;
+  const earlierResultCards = resultCards.slice(1);
 
   return (
     <RailwaySidePanel
@@ -173,27 +175,27 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
               </div>
             ) : (
               <div className="space-y-4">
-                {resultCards.map((card, reportIdx) => (
+                {latestResultCard ? (
                   <div
-                    key={card.reportId}
-                    data-testid={`rg-result-report-${reportIdx}`}
+                    key={latestResultCard.reportId}
+                    data-testid="rg-result-report-0"
                     className="space-y-3 rounded-2xl border border-white/8 bg-white/[0.02] p-3"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
-                          {reportIdx === 0 ? "Latest result" : `Earlier result ${reportIdx}`}
+                          Latest result
                         </div>
                         <div className="mt-1 text-[11px] text-white/45">
-                          {formatDateTime(new Date(card.completedAtMs).toISOString())}
+                          {formatDateTime(new Date(latestResultCard.completedAtMs).toISOString())}
                         </div>
                       </div>
                       <button
                         type="button"
-                        onClick={() => dismissResult(card.reportId)}
+                        onClick={() => dismissResult(latestResultCard.reportId)}
                         className="rounded-md border border-white/10 bg-black/20 p-1 text-white/45 transition hover:text-white"
-                        title={reportIdx === 0 ? "Hide latest result" : "Hide result"}
-                        aria-label={reportIdx === 0 ? "Hide latest result" : "Hide result"}
+                        title="Hide latest result"
+                        aria-label="Hide latest result"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -202,7 +204,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                     <div
                       className={clsx(
                         "flex flex-col gap-2 rounded-2xl border px-4 py-3",
-                        card.result.pass
+                        latestResultCard.result.pass
                           ? "border-l-2 border-emerald-500/50 bg-emerald-500/5 text-emerald-100"
                           : "border-l-2 border-rose-500/50 bg-rose-500/5 text-rose-100"
                       )}
@@ -211,31 +213,31 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                         <div
                           className={clsx(
                             "text-sm font-semibold",
-                            card.result.pass ? "text-emerald-200" : "text-rose-200"
+                            latestResultCard.result.pass ? "text-emerald-200" : "text-rose-200"
                           )}
                         >
-                          {card.result.pass ? "Looks good" : "Needs review"}
+                          {latestResultCard.result.pass ? "Looks good" : "Needs review"}
                         </div>
                         <div className="text-[11px] text-white/45">
-                          {card.result.pass
+                          {latestResultCard.result.pass
                             ? "All selected inputs passed."
                             : "One or more inputs need review."}
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/60">
-                        <span>Inputs: {Number(card.result.total_inputs ?? 0)}</span>
+                        <span>Inputs: {Number(latestResultCard.result.total_inputs ?? 0)}</span>
                         <span className="h-1 w-1 rounded-full bg-white/20" />
-                        <span>Repeats: {Number(card.result.repeat_runs ?? repeatRuns)}</span>
-                        {card.result?.perf && typeof card.result.perf === "object" && (
+                        <span>Repeats: {Number(latestResultCard.result.repeat_runs ?? repeatRuns)}</span>
+                        {latestResultCard.result?.perf && typeof latestResultCard.result.perf === "object" && (
                           <>
                             <span className="h-1 w-1 rounded-full bg-white/20" />
                             <span>
-                              Avg: {formatDurationMs((card.result.perf as any).avg_attempt_wall_ms)}
+                              Avg: {formatDurationMs((latestResultCard.result.perf as any).avg_attempt_wall_ms)}
                             </span>
                           </>
                         )}
                       </div>
-                      {card.toolGroundingRunSummary ? (
+                      {latestResultCard.toolGroundingRunSummary ? (
                         <div className="mt-2 rounded-xl border border-white/8 bg-black/25 px-3 py-2">
                           <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">
                             Tool grounding
@@ -244,26 +246,26 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                             <span>
                               With tools:{" "}
                               <span className="font-semibold text-white/90">
-                                {card.toolGroundingRunSummary.withTools}
+                                {latestResultCard.toolGroundingRunSummary.withTools}
                               </span>
                             </span>
                             <span className="text-emerald-400/90">
-                              Looks good {card.toolGroundingRunSummary.pass}
+                              Looks good {latestResultCard.toolGroundingRunSummary.pass}
                             </span>
                             <span className="text-rose-400/90">
-                              Needs review {card.toolGroundingRunSummary.fail}
+                              Needs review {latestResultCard.toolGroundingRunSummary.fail}
                             </span>
-                            {card.toolGroundingRunSummary.semanticOk > 0 ? (
+                            {latestResultCard.toolGroundingRunSummary.semanticOk > 0 ? (
                               <span className="text-violet-300/90">
-                                Semantic OK {card.toolGroundingRunSummary.semanticOk}
+                                Semantic OK {latestResultCard.toolGroundingRunSummary.semanticOk}
                               </span>
                             ) : null}
-                            {card.toolGroundingRunSummary.semanticOff > 0 ? (
+                            {latestResultCard.toolGroundingRunSummary.semanticOff > 0 ? (
                               <span
                                 className="text-white/30"
                                 title="Semantic judge did not run (e.g. no OpenAI key)."
                               >
-                                Semantic judge off {card.toolGroundingRunSummary.semanticOff}
+                                Semantic judge off {latestResultCard.toolGroundingRunSummary.semanticOff}
                               </span>
                             ) : null}
                           </div>
@@ -271,12 +273,13 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                       ) : null}
                     </div>
 
-                    <details className="group rounded-2xl border border-white/8 bg-black/20" open={reportIdx === 0}>
+                    <details className="group rounded-2xl border border-white/8 bg-black/20">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-white/80 marker:content-none">
                         <span>View case results</span>
-                        <span className="text-[11px] text-white/35">Expand</span>`r`n                      </summary>
+                        <span className="text-[11px] text-white/35">Expand</span>
+                      </summary>
                       <div className="border-t border-white/6 px-3 py-3">
-                        {card.visibleResultCases.length === 0 ? (
+                        {latestResultCard.visibleResultCases.length === 0 ? (
                           <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-white/30">
                             {resultCaseFilter === "failed"
                               ? "No inputs need review in this run."
@@ -286,7 +289,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                           </div>
                         ) : (
                           <div className="flex flex-col gap-2">
-                            {card.visibleResultCases.map(({ run, caseIndex: idx }) => {
+                            {latestResultCard.visibleResultCases.map(({ run, caseIndex: idx }) => {
                               const baselineSnapshotForRun =
                                 (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
                                   | Record<string, unknown>
@@ -300,10 +303,10 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
 
                               return (
                                 <ResultCaseRowButton
-                                  key={`${card.reportId}-${idx}`}
+                                  key={`${latestResultCard.reportId}-${idx}`}
                                   run={run}
                                   idx={idx}
-                                  repeatRunsFallback={card.result.repeat_runs ?? repeatRuns}
+                                  repeatRunsFallback={latestResultCard.result.repeat_runs ?? repeatRuns}
                                   baselineSnapshotForRun={baselineSnapshotForRun}
                                   onSelect={({ attempts, caseIndex, baselineSnapshot }) =>
                                     setDetailAttemptView({
@@ -313,7 +316,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                                       baselineSnapshot,
                                     })
                                   }
-                                  testId={`rg-result-report-${reportIdx}-case-${idx}`}
+                                  testId={`rg-result-report-0-case-${idx}`}
                                 />
                               );
                             })}
@@ -322,7 +325,56 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                       </div>
                     </details>
                   </div>
-                ))}
+                ) : null}
+
+                {earlierResultCards.length > 0 ? (
+                  <details className="group rounded-2xl border border-white/8 bg-black/20">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-white/75 marker:content-none">
+                      <span>Earlier results</span>
+                      <span className="text-[11px] text-white/35">
+                        {earlierResultCards.length} hidden
+                      </span>
+                    </summary>
+                    <div className="space-y-3 border-t border-white/6 px-3 py-3">
+                      {earlierResultCards.map((card, idx) => (
+                        <div
+                          key={card.reportId}
+                          data-testid={`rg-result-report-${idx + 1}`}
+                          className="rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
+                                Earlier result {idx + 1}
+                              </div>
+                              <div className="mt-1 text-[11px] text-white/45">
+                                {formatDateTime(new Date(card.completedAtMs).toISOString())}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => dismissResult(card.reportId)}
+                              className="rounded-md border border-white/10 bg-black/20 p-1 text-white/45 transition hover:text-white"
+                              title="Hide result"
+                              aria-label="Hide result"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-white/60">
+                            <span className={clsx("font-semibold", card.result.pass ? "text-emerald-300" : "text-rose-300")}>
+                              {card.result.pass ? "Looks good" : "Needs review"}
+                            </span>
+                            <span className="h-1 w-1 rounded-full bg-white/20" />
+                            <span>Inputs: {Number(card.result.total_inputs ?? 0)}</span>
+                            <span className="h-1 w-1 rounded-full bg-white/20" />
+                            <span>Repeats: {Number(card.result.repeat_runs ?? repeatRuns)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
               </div>
             )}
           </div>

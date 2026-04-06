@@ -143,37 +143,28 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
               <div className="flex h-full flex-col">
                 <div className="shrink-0 border-b border-white/[0.06] px-4 py-2.5">
                   <p className="text-[11px] leading-relaxed text-slate-400">
-                    Pick snapshots or saved sets below, then run the experiment from the center panel.
+                    Pick snapshots or saved sets for this experiment.
                   </p>
                 </div>
                 {dataPanelTab === "logs" && (
                   <div className="flex h-full flex-col" data-testid="rg-data-panel-logs">
                     <div className="space-y-2 border-b border-white/[0.06] bg-transparent px-4 py-3">
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="text-[11px] font-medium leading-snug text-white/70">
-                          Showing{" "}
-                          <span className="font-mono text-white/90">
-                            {filteredRecentSnapshots.length}
-                          </span>{" "}
-                          of{" "}
-                          <span className="font-mono text-white/90">{logsMatchCount}</span>{" "}
-                          snapshots
-                          {logsMatchCount > logsShowLimit ? (
-                            <span className="text-slate-500"> · cap {logsShowLimit}</span>
-                          ) : null}
-                        </div>
-                        <div className="text-[10px] leading-snug text-white/50">
+                      <div className="min-w-0 text-[11px] leading-snug text-white/65">
+                        <span className="font-medium text-white/85">
                           {dataSource === "datasets"
                             ? runDatasetIds.length > 0
-                              ? `${runDatasetIds.length} saved set${runDatasetIds.length === 1 ? "" : "s"} selected`
-                              : "Saved sets source selected"
+                              ? `${runDatasetIds.length} selected`
+                              : "No inputs selected"
                             : runSnapshotIds.length > 0
-                              ? `${runSnapshotIds.length} snapshot${runSnapshotIds.length === 1 ? "" : "s"} selected`
+                              ? `${runSnapshotIds.length} selected`
                               : "No inputs selected"}
-                          {typeof recentSnapshotsTotalAvailable === "number"
-                            ? ` · ${recentSnapshots.length} loaded`
-                            : ""}
-                        </div>
+                        </span>
+                        <span className="text-white/35"> ? </span>
+                        <span>{dataPanelTab === "logs" ? "Live source" : "Saved source"}</span>
+                        <span className="text-white/35"> ? </span>
+                        <span>
+                          Showing {filteredRecentSnapshots.length} of {logsMatchCount} snapshots
+                        </span>
                       </div>
 
                       <div className="flex flex-wrap items-stretch gap-2">
@@ -283,7 +274,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                             Loading recent snapshots
                           </div>
                           <div className="mt-2 text-[11px] text-slate-500">
-                            Fetching baseline logs for this agent...
+                            Fetching snapshots for this agent...
                           </div>
                         </div>
                       ) : recentSnapshots.length === 0 ? (
@@ -386,7 +377,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                                           className="truncate font-mono text-[9px] text-slate-600"
                                           title={String(snap.trace_id)}
                                         >
-                                          {String(snap.trace_id).slice(0, 14)}??
+                                          {String(snap.trace_id).slice(0, 14)}...
                                         </p>
                                       )}
                                     </div>
