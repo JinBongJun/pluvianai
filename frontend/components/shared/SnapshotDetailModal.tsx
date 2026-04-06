@@ -7,6 +7,7 @@ import {
   AlignLeft,
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   Scale,
   Send,
   ShieldCheck,
@@ -466,9 +467,20 @@ export function SnapshotDetailModal({
                     <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-200">
                       All checks passed.
                     </div>
-                    <details className="rounded-2xl border border-white/8 bg-black/10">
-                      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-slate-200">
-                        View checks
+                    <details className="group rounded-2xl border border-emerald-500/10 bg-emerald-500/[0.03]">
+                      <summary className="list-none cursor-pointer rounded-2xl px-4 py-3 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111216]">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span>View checks</span>
+                            <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                              Expand
+                            </span>
+                          </div>
+                          <ChevronDown
+                            className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180"
+                            aria-hidden="true"
+                          />
+                        </div>
                       </summary>
                       <div className="border-t border-white/5 p-4">
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -661,17 +673,30 @@ export function SnapshotDetailModal({
                 ) : null}
               </div>
 
-              <details className="rounded-[24px] border border-white/5 bg-[#0f1115] shadow-inner">
-                <summary className="cursor-pointer list-none px-6 py-5">
-                  <div className="flex items-center gap-3">
-                    <SlidersHorizontal className="h-5 w-5 text-fuchsia-400" />
-                    <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
-                      Technical Details
-                    </span>
+              <details className="group rounded-[24px] border border-white/5 bg-[#0f1115] shadow-inner">
+                <summary className="list-none cursor-pointer rounded-[24px] px-6 py-5 transition-colors hover:bg-white/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111216]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <SlidersHorizontal className="h-5 w-5 text-fuchsia-400" />
+                        <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
+                          Technical Details
+                        </span>
+                      </div>
+                      <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                        Request structure, captured context, and execution traces for deeper inspection.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 pt-0.5">
+                      <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+                        Expand
+                      </span>
+                      <ChevronDown
+                        className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180"
+                        aria-hidden="true"
+                      />
+                    </div>
                   </div>
-                  <p className="mt-3 text-xs leading-relaxed text-slate-500">
-                    Request structure, captured context, and execution traces for deeper inspection.
-                  </p>
                 </summary>
                 <div className="px-6 pb-6 flex flex-col gap-6">
 
