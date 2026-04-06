@@ -87,7 +87,9 @@ export function buildIssueTitle(args: {
   return "Latest response";
 }
 
-export function formatCasePreview(value?: string | null): string {
+export function formatCasePreview(value?: string | null, maxLength = 72): string {
   const normalized = (value || "").replace(/\s+/g, " ").trim();
-  return normalized || "No request text captured";
+  if (!normalized) return "No input preview";
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
