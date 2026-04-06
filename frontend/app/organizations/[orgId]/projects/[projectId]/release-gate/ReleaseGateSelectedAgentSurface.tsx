@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React from "react";
 import clsx from "clsx";
 import {
   Box,
@@ -25,16 +25,7 @@ export function ReleaseGateSelectedAgentSurface({
   agentLabel: string;
   rgDetails: ReleaseGateMapRgDetails | null;
 }) {
-  const evalListScrollRef = useRef<HTMLUListElement | null>(null);
-  const [surfaceTab, setSurfaceTab] = useState<"run" | "configure">("run");
   const surfacePhase = getReleaseGateSelectedAgentSurfacePhase(rgDetails);
-  const handleEvalListWheel = useCallback((e: React.WheelEvent) => {
-    const el = evalListScrollRef.current;
-    if (!el) return;
-    e.preventDefault();
-    e.stopPropagation();
-    el.scrollTop += e.deltaY;
-  }, []);
 
   if (surfacePhase === "pending") {
     return (
@@ -227,32 +218,6 @@ export function ReleaseGateSelectedAgentSurface({
           </button>
         </div>
 
-        <div className="flex shrink-0 gap-1 border-b border-white/[0.06] px-5 pt-2">
-          {(
-            [
-              ["run", "Run experiment"],
-              ["configure", "Configure"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setSurfaceTab(id)}
-              className={clsx(
-                "relative px-4 py-2.5 text-sm font-semibold transition-colors",
-                surfaceTab === id
-                  ? "text-white"
-                  : "text-slate-500 hover:text-slate-300"
-              )}
-            >
-              {label}
-              {surfaceTab === id ? (
-                <span className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-fuchsia-500/90" />
-              ) : null}
-            </button>
-          ))}
-        </div>
-
         {(startBlockedReason || runError) && (
           <div className="shrink-0 border-b border-white/[0.06] px-5 py-3">
             <div
@@ -274,84 +239,74 @@ export function ReleaseGateSelectedAgentSurface({
         )}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {surfaceTab === "run" ? (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5 custom-scrollbar">
             <div className="rounded-[22px] border border-white/[0.08] bg-white/[0.02] p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                    Run Experiment
-                  </p>
-                  <h3 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                    Compare a candidate change against selected production snapshots.
-                  </h3>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                    Pick inputs on the left, review the candidate and checks here, then run the
-                    experiment.
-                  </p>
-                </div>
-                {configSourceLabel ? (
-                  <div className="shrink-0 rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3 text-right">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Current source
-                    </div>
-                    <div className="mt-1 text-sm font-medium text-white/80">{configSourceLabel}</div>
-                  </div>
-                ) : null}
-              </div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                Run Experiment
+              </p>
+              <h3 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                Compare a candidate against selected production snapshots.
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Review the current setup below, then run the experiment.
+              </p>
             </div>
 
-            <div className="space-y-3">
-              <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+            <div className="overflow-hidden rounded-[20px] border border-white/[0.08] bg-white/[0.02]">
+              <div className="flex items-start gap-3 px-4 py-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-400/10">
                   <Box className="h-3.5 w-3.5 text-sky-400/80" />
-                  Inputs
                 </div>
-                <div className="mt-2 flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    Inputs
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-white">
+                    {selectedBaselineCount > 0
+                      ? `${selectedBaselineCount} ${selectedBaselineCount === 1 ? "input" : "inputs"} selected`
+                      : "No inputs selected"}
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">{baselineSummaryText}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-white/[0.06] px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-fuchsia-400/10">
+                    <Wrench className="h-3.5 w-3.5 text-fuchsia-300/80" />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-white">
-                      {selectedBaselineCount > 0
-                        ? `${selectedBaselineCount} ${selectedBaselineCount === 1 ? "input" : "inputs"} selected`
-                        : "No inputs selected"}
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      Candidate
                     </div>
-                    <p className="mt-1 text-sm leading-6 text-slate-400">{baselineSummaryText}</p>
+                    <div className="mt-1 text-sm font-semibold text-white">
+                      {resolvedDetails.model || "Unknown model"}
+                    </div>
+                    <p className="mt-1 text-sm leading-6 text-slate-400">
+                      {providerLabel}
+                      <span className="px-1.5 text-white/25">?</span>
+                      {toolsCount} tools
+                      {configSourceLabel ? (
+                        <>
+                          <span className="px-1.5 text-white/25">?</span>
+                          {configSourceLabel}
+                        </>
+                      ) : null}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  <Wrench className="h-3.5 w-3.5 text-fuchsia-300/80" />
-                  Candidate
-                </div>
-                <div className="mt-2 flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1 text-sm text-slate-400">
-                    <span className="font-semibold text-white" title={modelLabel}>
-                      {modelLabel}
-                    </span>
-                    <span className="px-1.5 text-white/25">·</span>
-                    <span>{providerLabel}</span>
-                    <span className="px-1.5 text-white/25">·</span>
-                    <span>{toolsCount} tools</span>
+              <div className="border-t border-white/[0.06] px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-400/10">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80" />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSurfaceTab("configure")}
-                    className="shrink-0 rounded-xl border border-fuchsia-500/25 bg-fuchsia-500/[0.08] px-3 py-2 text-xs font-semibold text-fuchsia-200 transition hover:bg-fuchsia-500/[0.14]"
-                  >
-                    Edit
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80" />
-                  Checks
-                </div>
-                <div className="mt-2 flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-white">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      Checks
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-white">
                       {checksCount + policyChecksCount > 0
                         ? `${checksCount + policyChecksCount} active`
                         : "No checks configured"}
@@ -365,171 +320,14 @@ export function ReleaseGateSelectedAgentSurface({
                       </p>
                     ) : (
                       <p className="mt-1 text-sm leading-6 text-slate-400">
-                        Add evaluation or policy checks before running the experiment.
+                        Add evaluation or policy checks in Settings before running the experiment.
                       </p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSurfaceTab("configure")}
-                    className="shrink-0 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/[0.12]"
-                  >
-                    Edit
-                  </button>
                 </div>
               </div>
             </div>
           </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 gap-6 overflow-y-auto px-5 py-5 custom-scrollbar">
-            <div className="flex w-[280px] shrink-0 flex-col min-h-0 border-r border-white/[0.05] pr-5">
-              <div className="mb-5 flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/40">
-                <ShieldCheck className="h-4 w-4 text-emerald-500/70" />
-                Eval Checks
-              </div>
-              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar" onWheel={handleEvalListWheel}>
-                {Array.isArray(resolvedDetails.activeChecksCards) &&
-                resolvedDetails.activeChecksCards.length > 0 ? (
-                  <ul ref={evalListScrollRef} className="space-y-5">
-                    {resolvedDetails.activeChecksCards.map(card => (
-                      <li key={card.id} className="flex flex-col gap-2">
-                        <div className="flex items-start gap-2.5">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                          <span className="min-w-0 text-[13px] font-semibold leading-snug tracking-wide text-white/90">
-                            {card.label}
-                          </span>
-                        </div>
-                        {card.params ? (
-                          <div className="pl-7">
-                            <span className="line-clamp-2 rounded-md bg-white/[0.02] px-2.5 py-1.5 font-mono text-xs leading-relaxed text-white/45">
-                              {card.params}
-                            </span>
-                          </div>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : Array.isArray(resolvedDetails.activeChecks) &&
-                  resolvedDetails.activeChecks.length > 0 ? (
-                  <ul ref={evalListScrollRef} className="space-y-3">
-                    {resolvedDetails.activeChecks.map((name, i) => (
-                      <li key={`${name}-${i}`} className="flex items-center gap-2.5">
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                        <span className="truncate text-[13px] font-semibold tracking-wide text-white/90">
-                          {name.replace(/_/g, " ")}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="rounded-xl border border-dashed border-white/5 p-4 text-sm text-white/40">
-                    No active checks configured.
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-6 shrink-0">
-                <div className="mb-3 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/40">
-                  <ShieldCheck className="h-3.5 w-3.5 text-amber-400/70" />
-                  Policy Checks
-                </div>
-                {Array.isArray(resolvedDetails.policyCheckCards) &&
-                resolvedDetails.policyCheckCards.length > 0 ? (
-                  <ul className="space-y-4">
-                    {resolvedDetails.policyCheckCards.map(card => (
-                      <li key={card.id} className="flex flex-col gap-2">
-                        <div className="flex items-start gap-2.5">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-                          <span className="min-w-0 text-[13px] font-semibold leading-snug tracking-wide text-white/90">
-                            {card.label}
-                          </span>
-                        </div>
-                        {card.detail ? (
-                          <div className="pl-7">
-                            <span className="line-clamp-3 rounded-md bg-white/[0.02] px-2.5 py-1.5 text-xs leading-relaxed text-white/45">
-                              {card.detail}
-                            </span>
-                          </div>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="rounded-xl border border-dashed border-white/5 px-3 py-2 text-xs text-white/40">
-                    No policy checks enabled.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex min-w-0 flex-1 flex-col min-h-0">
-              <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-white/40">
-                  Candidate settings
-                </div>
-                {configSourceLabel ? (
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-white/70">
-                    {configSourceLabel}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="flex min-h-0 flex-1 flex-col gap-4">
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
-                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">Model</div>
-                    <div className="mt-1 truncate text-white/90" title={modelLabel}>
-                      {modelLabel}
-                    </div>
-                  </div>
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
-                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">
-                      Provider
-                    </div>
-                    <div className="mt-1 truncate text-white/90" title={providerLabel}>
-                      {providerLabel}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
-                  <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">
-                    System prompt
-                  </div>
-                  <p
-                    className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-white/90"
-                    title={promptPreview || "No system prompt configured."}
-                  >
-                    {promptPreview || "No system prompt configured."}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 gap-2 text-[11px]">
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 text-white/80 transition-colors hover:bg-white/[0.04]">
-                    <span className="text-white/40">Sampling:</span>{" "}
-                    {samplingSummaryText || "Using provider defaults"}
-                  </div>
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 text-white/80 transition-colors hover:bg-white/[0.04]">
-                    <span className="text-white/40">Tools:</span> {toolsSummaryText || "No tools configured"}
-                  </div>
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-2 text-white/80 transition-colors hover:bg-white/[0.04]">
-                    <span className="text-white/40">Override:</span>{" "}
-                    {overrideSummaryText || "Using detected model"}
-                  </div>
-                </div>
-
-                <div className="flex max-h-[min(42vh,380px)] min-h-0 flex-col border-t border-white/5 pt-3">
-                  <div className="mb-1 text-[10px] uppercase tracking-[0.15em] text-white/40">
-                    Payload (raw preview)
-                  </div>
-                  <pre className="min-h-[120px] flex-1 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-white/60 custom-scrollbar">
-                    {String(rgConfig.originalPayloadPreview || "{}")}
-                  </pre>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
         </div>
 
         <div className="flex shrink-0 flex-col gap-3 border-t border-white/[0.08] bg-black/20 px-6 pb-6 pt-5 shadow-[0_-14px_30px_rgba(0,0,0,0.18)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:gap-4">
