@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
+import { Settings, ShieldCheck } from "lucide-react";
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -130,7 +131,7 @@ export function LiveViewContent() {
     sseConnected,
     sseBackoffUntilRef,
   });
-  const [panelTab, setPanelTab] = useState<"logs" | "eval" | "data" | "settings">("logs");
+  const [panelTab, setPanelTab] = useState<"issues" | "saved" | "checks" | "settings">("issues");
 
   useLiveViewSseLifecycle({
     projectId,
@@ -308,34 +309,62 @@ export function LiveViewContent() {
       rightPanel={
         <RailwaySidePanel
           title={selectedAgentId || "Agent Diagnostics"}
-          headerActions={selectedAgentId ? <LiveViewPanelSnapshotUsage /> : undefined}
+          headerActions={
+            selectedAgentId ? (
+              <>
+                <LiveViewPanelSnapshotUsage />
+                <button
+                  type="button"
+                  onClick={() => setPanelTab("checks")}
+                  className={
+                    panelTab === "checks"
+                      ? "inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
+                      : "inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
+                  }
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Checks
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPanelTab("settings")}
+                  className={
+                    panelTab === "settings"
+                      ? "inline-flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1.5 text-xs font-medium text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+                      : "inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+                  }
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                  Settings
+                </button>
+              </>
+            ) : undefined
+          }
           isOpen={!!selectedAgentId}
           width={760}
           contentClassName="h-0 min-h-0"
           contentScrollable={false}
           onClose={() => {
             setSelectedAgentId(null);
-            setPanelTab("logs");
+            setPanelTab("issues");
           }}
           tabs={[
-            { id: "logs", label: "Live Logs" },
-            { id: "eval", label: "Evaluation" },
-            { id: "data", label: "Saved Data" },
-            { id: "settings", label: "Settings" },
+            { id: "issues", label: "Issues" },
+            { id: "saved", label: "Saved" },
           ]}
           activeTab={panelTab}
-          onTabChange={id => setPanelTab(id as "logs" | "eval" | "data" | "settings")}
+          onTabChange={id => setPanelTab(id as "issues" | "saved")}
         >
-          {panelTab === "logs" ? (
+          {panelTab === "issues" ? (
             <ClinicalLog
               {...panelCtx}
               onLogsMutated={() => mutateAgents(undefined, true)}
             />
           ) : null}
-          {panelTab === "eval" ? (
+          {panelTab === "checks" ? (
             <AgentEvaluationPanel projectId={panelCtx.projectId} agentId={panelCtx.agentId} />
           ) : null}
-          {panelTab === "data" ? (
+          {panelTab === "saved" ? (
             <ClinicalLogDataSection {...panelCtx} />
           ) : null}
           {panelTab === "settings" ? (
@@ -345,7 +374,7 @@ export function LiveViewContent() {
               onAgentUpdated={() => void mutateAgents()}
               onAgentDeleted={() => {
                 setSelectedAgentId(null);
-                setPanelTab("logs");
+                setPanelTab("issues");
                 void mutateAgents(undefined, true);
               }}
             />
