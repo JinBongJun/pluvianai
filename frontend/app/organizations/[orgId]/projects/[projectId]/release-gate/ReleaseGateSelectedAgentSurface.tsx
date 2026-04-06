@@ -27,7 +27,6 @@ export function ReleaseGateSelectedAgentSurface({
 }) {
   const evalListScrollRef = useRef<HTMLUListElement | null>(null);
   const [surfaceTab, setSurfaceTab] = useState<"run" | "configure">("run");
-  const [payloadOpen, setPayloadOpen] = useState(false);
   const surfacePhase = getReleaseGateSelectedAgentSurfacePhase(rgDetails);
   const handleEvalListWheel = useCallback((e: React.WheelEvent) => {
     const el = evalListScrollRef.current;
@@ -77,12 +76,12 @@ export function ReleaseGateSelectedAgentSurface({
     : configSourceLabel
       ? `Preview source: ${configSourceLabel}`
       : String(rgConfig.selectedDataSummary || "").trim() ||
-        "Choose baseline data from Live Logs or Saved Data.";
+        "Choose baseline data from Live snapshots or Saved sets.";
   const lastRunStatusLabel =
     typeof rgConfig.lastRunStatusLabel === "string" ? rgConfig.lastRunStatusLabel.trim() : "";
   const startBlockedReason = (() => {
     if (rgConfig.isValidating) {
-      if (rgConfig.cancelRequested) return "Canceling…";
+      if (rgConfig.cancelRequested) return "Canceling...";
       return "Run in progress.";
     }
     if (runLocked) {
@@ -97,21 +96,21 @@ export function ReleaseGateSelectedAgentSurface({
       typeof rgConfig.selectedBaselineCount === "number" &&
       rgConfig.selectedBaselineCount === 0
     ) {
-      return "Select baseline data in Live Logs or Saved Data.";
+      return "Select baseline data in Live snapshots or Saved sets.";
     }
     if (!rgConfig.canRunValidate) {
-      return "Complete required selections to enable Start.";
+      return "Complete required selections to run the experiment.";
     }
     return "";
   })();
   const cancelDisabled = rgConfig.cancelRequested || rgConfig.cancelLocked;
   const cancelLabel = rgConfig.cancelRequested
-    ? "Canceling…"
+    ? "Canceling..."
     : rgConfig.cancelLocked
       ? "Usage Counted"
       : rgConfig.activeJobId
         ? "Cancel"
-        : "Cancel (starting…)";
+        : "Cancel (starting??";
   const cancelTitle = rgConfig.cancelLocked
     ? "This run has already started and usage has been counted."
     : undefined;
@@ -122,7 +121,7 @@ export function ReleaseGateSelectedAgentSurface({
   const promptPreview = String(resolvedDetails.prompt || "")
     .trim()
     .replace(/\s+/g, " ");
-  const modelLabel = String(resolvedDetails.model || "").trim().toLowerCase() || "—";
+  const modelLabel = String(resolvedDetails.model || "").trim().toLowerCase() || "unknown";
   const providerLabel =
     String(resolvedDetails.provider || "").trim().toLowerCase() || "release-gate";
   const samplingSummaryText =
@@ -131,11 +130,24 @@ export function ReleaseGateSelectedAgentSurface({
     typeof rgConfig.toolsSummary === "string" ? rgConfig.toolsSummary.trim() : "";
   const overrideSummaryText =
     typeof rgConfig.overrideSummary === "string" ? rgConfig.overrideSummary.trim() : "";
+  const selectedBaselineCount =
+    typeof rgConfig.selectedBaselineCount === "number" ? rgConfig.selectedBaselineCount : 0;
+  const checksPreview = Array.isArray(resolvedDetails.activeChecksCards)
+    ? resolvedDetails.activeChecksCards.slice(0, 4).map(card => card.label)
+    : Array.isArray(resolvedDetails.activeChecks)
+      ? resolvedDetails.activeChecks.slice(0, 4).map(name => name.replace(/_/g, " "))
+      : [];
+  const checksCount = Array.isArray(resolvedDetails.activeChecksCards)
+    ? resolvedDetails.activeChecksCards.length
+    : Array.isArray(resolvedDetails.activeChecks)
+      ? resolvedDetails.activeChecks.length
+      : 0;
+  const policyChecksCount = Array.isArray(resolvedDetails.policyCheckCards)
+    ? resolvedDetails.policyCheckCards.length
+    : 0;
 
   const handleStartClick = () => {
-    const baselineCount =
-      typeof rgConfig.selectedBaselineCount === "number" ? rgConfig.selectedBaselineCount : 0;
-    const isDisabled = !rgConfig.canRunValidate || runLocked || baselineCount === 0;
+    const isDisabled = !rgConfig.canRunValidate || runLocked || selectedBaselineCount === 0;
     if (isDisabled) return;
     rgConfig.handleValidate();
   };
@@ -183,7 +195,7 @@ export function ReleaseGateSelectedAgentSurface({
               <div className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5">
                 <Box className="h-2.5 w-2.5 text-slate-500" />
                 <span className="max-w-[120px] truncate text-[10px] font-medium text-slate-300">
-                  {resolvedDetails.model || "—"}
+                  {resolvedDetails.model || "Unknown"}
                 </span>
               </div>
               <div className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5">
@@ -225,7 +237,7 @@ export function ReleaseGateSelectedAgentSurface({
         <div className="flex shrink-0 gap-1 border-b border-white/[0.06] px-5 pt-2">
           {(
             [
-              ["run", "Run"],
+              ["run", "Run experiment"],
               ["configure", "Configure"],
             ] as const
           ).map(([id, label]) => (
@@ -266,118 +278,131 @@ export function ReleaseGateSelectedAgentSurface({
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {surfaceTab === "run" ? (
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5 custom-scrollbar">
-            <p className="shrink-0 text-center text-[11px] font-medium uppercase tracking-[0.2em] text-slate-500">
-              ① Pick inputs (side panels) → ② Review below → ③ Start
-            </p>
-            <div className="flex min-h-0 flex-1 items-stretch gap-6">
-              <div className="flex w-[240px] shrink-0 flex-col min-h-0 border-r border-white/[0.05] pr-5">
-                <div className="mb-3 flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/40">
-                  <ShieldCheck className="h-4 w-4 text-emerald-500/70" />
-                  Eval (summary)
+            <div className="rounded-[22px] border border-white/[0.08] bg-white/[0.02] p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                    Run Experiment
+                  </p>
+                  <h3 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                    Compare a candidate change against selected production snapshots.
+                  </h3>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                    Pick inputs on the left, review the candidate and checks here, then run the
+                    experiment.
+                  </p>
                 </div>
-                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar text-sm text-white/70">
-                  {Array.isArray(resolvedDetails.activeChecksCards) &&
-                  resolvedDetails.activeChecksCards.length > 0 ? (
-                    <ul className="space-y-2">
-                      {resolvedDetails.activeChecksCards.slice(0, 4).map(card => (
-                        <li key={card.id} className="flex items-start gap-2">
-                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400/90" />
-                          <span className="line-clamp-2 text-[12px] font-medium leading-snug text-white/85">
-                            {card.label}
-                          </span>
-                        </li>
-                      ))}
-                      {resolvedDetails.activeChecksCards.length > 4 ? (
-                        <li className="text-[11px] text-slate-500">
-                          +{resolvedDetails.activeChecksCards.length - 4} more in Configure
-                        </li>
-                      ) : null}
-                    </ul>
-                  ) : Array.isArray(resolvedDetails.activeChecks) && resolvedDetails.activeChecks.length > 0 ? (
-                    <ul className="space-y-2">
-                      {resolvedDetails.activeChecks.slice(0, 4).map((name, i) => (
-                        <li key={`${name}-${i}`} className="flex items-center gap-2">
-                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400/90" />
-                          <span className="truncate text-[12px] font-medium text-white/85">
-                            {name.replace(/_/g, " ")}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-white/35">No checks configured.</p>
-                  )}
+                {configSourceLabel ? (
+                  <div className="shrink-0 rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3 text-right">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Current source
+                    </div>
+                    <div className="mt-1 text-sm font-medium text-white/80">{configSourceLabel}</div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-[20px] border border-white/[0.08] bg-white/[0.02] p-4">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  <Box className="h-3.5 w-3.5 text-sky-400/80" />
+                  Inputs
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSurfaceTab("configure")}
-                  className="mt-4 shrink-0 text-left text-[12px] font-semibold text-fuchsia-300/90 underline-offset-2 hover:text-fuchsia-200 hover:underline"
-                >
-                  Edit all eval &amp; policy checks →
-                </button>
+                <div className="mt-3 text-lg font-semibold text-white">
+                  {selectedBaselineCount > 0 ? `${selectedBaselineCount} selected` : "No inputs selected"}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{baselineSummaryText}</p>
               </div>
 
-              <div className="flex min-w-0 flex-1 flex-col min-h-0 gap-3">
-                <div className="flex shrink-0 items-center justify-between gap-3">
-                  <div className="text-xs font-black uppercase tracking-[0.2em] text-white/40">
-                    This run
-                  </div>
-                  {configSourceLabel ? (
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-white/70">
-                      {configSourceLabel}
-                    </span>
-                  ) : null}
+              <div className="rounded-[20px] border border-white/[0.08] bg-white/[0.02] p-4">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  <Wrench className="h-3.5 w-3.5 text-fuchsia-300/80" />
+                  Candidate
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">Model</div>
-                    <div className="mt-1 truncate text-white/90" title={modelLabel}>
+                <div className="mt-3 grid gap-2 text-sm text-white/85">
+                  <div className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
+                    <span className="text-slate-400">Model</span>
+                    <span className="truncate text-right font-medium text-white" title={modelLabel}>
                       {modelLabel}
-                    </div>
+                    </span>
                   </div>
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-2">
-                    <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">Provider</div>
-                    <div className="mt-1 truncate text-white/90" title={providerLabel}>
+                  <div className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
+                    <span className="text-slate-400">Provider</span>
+                    <span className="truncate text-right font-medium text-white" title={providerLabel}>
                       {providerLabel}
-                    </div>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
+                    <span className="text-slate-400">Tools</span>
+                    <span className="truncate text-right font-medium text-white">
+                      {toolsSummaryText || "No tools configured"}
+                    </span>
                   </div>
                 </div>
-                <div className="rounded-lg bg-white/[0.02] px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">System prompt</div>
+              </div>
+
+              <div className="rounded-[20px] border border-white/[0.08] bg-white/[0.02] p-4">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80" />
+                  Checks
+                </div>
+                <div className="mt-3 text-lg font-semibold text-white">
+                  {checksCount + policyChecksCount > 0
+                    ? `${checksCount + policyChecksCount} active`
+                    : "No checks configured"}
+                </div>
+                {checksPreview.length > 0 ? (
+                  <ul className="mt-3 space-y-2 text-sm text-white/80">
+                    {checksPreview.slice(0, 3).map((label, index) => (
+                      <li key={`${label}-${index}`} className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400/90" />
+                        <span className="line-clamp-2">{label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    Add evaluation or policy checks before running the experiment.
+                  </p>
+                )}
+                {checksCount + policyChecksCount > 3 ? (
+                  <p className="mt-3 text-xs text-slate-500">
+                    +{checksCount + policyChecksCount - 3} more in Configure
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[20px] border border-white/[0.08] bg-black/20 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Candidate notes
+                  </div>
                   <p
-                    className="mt-1 line-clamp-3 text-[11px] leading-relaxed text-white/90"
+                    className="mt-2 line-clamp-3 text-sm leading-6 text-white/85"
                     title={promptPreview || "No system prompt configured."}
                   >
                     {promptPreview || "No system prompt configured."}
                   </p>
                 </div>
-                <div className="grid grid-cols-1 gap-1.5 text-[11px] text-white/80">
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-1.5">
-                    <span className="text-white/40">Sampling:</span>{" "}
-                    {samplingSummaryText || "Using provider defaults"}
-                  </div>
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-1.5">
-                    <span className="text-white/40">Tools:</span> {toolsSummaryText || "No tools configured"}
-                  </div>
-                  <div className="rounded-lg bg-white/[0.02] px-3 py-1.5">
-                    <span className="text-white/40">Override:</span>{" "}
-                    {overrideSummaryText || "Using detected model"}
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => setSurfaceTab("configure")}
+                  className="shrink-0 rounded-xl border border-fuchsia-500/25 bg-fuchsia-500/[0.08] px-3 py-2 text-xs font-semibold text-fuchsia-200 transition hover:bg-fuchsia-500/[0.14]"
+                >
+                  Edit candidate
+                </button>
+              </div>
+              <div className="mt-4 grid gap-2 text-sm text-white/80 lg:grid-cols-2">
+                <div className="rounded-xl bg-white/[0.03] px-3 py-2">
+                  <span className="text-slate-400">Sampling:</span>{" "}
+                  {samplingSummaryText || "Using provider defaults"}
                 </div>
-                <div className="mt-auto shrink-0 border-t border-white/5 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setPayloadOpen(o => !o)}
-                    className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-white/50 transition hover:bg-white/[0.06]"
-                  >
-                    Payload (raw)
-                    <ChevronDown className={clsx("h-4 w-4 transition-transform", payloadOpen && "rotate-180")} />
-                  </button>
-                  {payloadOpen ? (
-                    <pre className="mt-2 max-h-[180px] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-white/5 bg-black/30 p-3 font-mono text-[10px] leading-relaxed text-white/55 custom-scrollbar">
-                      {String(rgConfig.originalPayloadPreview || "{}")}
-                    </pre>
-                  ) : null}
+                <div className="rounded-xl bg-white/[0.03] px-3 py-2">
+                  <span className="text-slate-400">Override:</span>{" "}
+                  {overrideSummaryText || "Using detected model"}
                 </div>
               </div>
             </div>
@@ -467,7 +492,7 @@ export function ReleaseGateSelectedAgentSurface({
             <div className="flex min-w-0 flex-1 flex-col min-h-0">
               <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
                 <div className="text-xs font-black uppercase tracking-[0.2em] text-white/40">
-                  Config Summary
+                  Candidate settings
                 </div>
                 {configSourceLabel ? (
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-medium text-white/70">
@@ -664,7 +689,7 @@ export function ReleaseGateSelectedAgentSurface({
                 ) : (
                   <>
                     <Play className="h-5 w-5 fill-current" />
-                    Start
+                    Run experiment
                   </>
                 )}
               </button>

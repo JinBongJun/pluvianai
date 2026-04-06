@@ -124,7 +124,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
   return (
             <RailwaySidePanel
               title={leftPanelTitle}
-              headerEyebrow="Run data"
+              headerEyebrow="Inputs"
               footerStatusLabel="Validation session active"
               isOpen={validatePanelOpen}
               onClose={onClose}
@@ -133,21 +133,17 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
               showCloseButton={false}
               className="pointer-events-auto"
               tabs={[
-                { id: "logs", label: "Live Logs" },
-                { id: "datasets", label: "Saved Data" },
+                { id: "logs", label: "Live snapshots" },
+                { id: "datasets", label: "Saved sets" },
               ]}
               tabTestIdPrefix="rg-data-tab"
               activeTab={dataPanelTab}
               onTabChange={id => setDataPanelTab(id as "logs" | "datasets")}
             >
               <div className="flex h-full flex-col">
-                <div className="shrink-0 border-b border-white/[0.06] bg-fuchsia-500/[0.04] px-4 py-2.5">
+                <div className="shrink-0 border-b border-white/[0.06] px-4 py-2.5">
                   <p className="text-[11px] leading-relaxed text-slate-400">
-                    <span className="font-medium text-slate-200">Pick inputs</span>
-                    {" — "}
-                    Use Live Logs or Saved Data below, then press{" "}
-                    <span className="font-medium text-slate-200">Start</span> on the agent card in the
-                    center.
+                    Pick snapshots or saved sets below, then run the experiment from the center panel.
                   </p>
                 </div>
                 {dataPanelTab === "logs" && (
@@ -161,25 +157,22 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                           </span>{" "}
                           of{" "}
                           <span className="font-mono text-white/90">{logsMatchCount}</span>{" "}
-                          logs
+                          snapshots
                           {logsMatchCount > logsShowLimit ? (
                             <span className="text-slate-500"> · cap {logsShowLimit}</span>
                           ) : null}
                         </div>
-                        <div className="text-[10px] leading-snug text-white/40">
-                          Loaded {recentSnapshots.length}
-                          {typeof recentSnapshotsTotalAvailable === "number"
-                            ? ` of ${recentSnapshotsTotalAvailable} on server`
-                            : ""}
-                        </div>
-                        <div className="text-[10px] font-semibold text-white/80">
+                        <div className="text-[10px] leading-snug text-white/50">
                           {dataSource === "datasets"
                             ? runDatasetIds.length > 0
-                              ? `Run source: ${runDatasetIds.length} saved dataset${runDatasetIds.length === 1 ? "" : "s"}`
-                              : "Run source: saved data (pick a dataset)"
+                              ? `${runDatasetIds.length} saved set${runDatasetIds.length === 1 ? "" : "s"} selected`
+                              : "Saved sets source selected"
                             : runSnapshotIds.length > 0
-                              ? `Selected ${runSnapshotIds.length} log${runSnapshotIds.length === 1 ? "" : "s"}`
-                              : "No logs selected for run"}
+                              ? `${runSnapshotIds.length} snapshot${runSnapshotIds.length === 1 ? "" : "s"} selected`
+                              : "No inputs selected"}
+                          {typeof recentSnapshotsTotalAvailable === "number"
+                            ? ` · ${recentSnapshots.length} loaded`
+                            : ""}
                         </div>
                       </div>
 
@@ -196,16 +189,16 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                               setLogsStatusFilter(e.target.value as LogsStatusFilter)
                             }
                             className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-white/60 hover:text-white/80 outline-none"
-                            title="All, Flagged, or Healthy logs"
+                            title="All, needs review, or healthy snapshots"
                           >
                             <option value="all" className="bg-[#18191e] text-slate-200">
                               All
                             </option>
                             <option value="failed" className="bg-[#18191e] text-slate-200">
-                              Flagged
+                              Needs review
                             </option>
                             <option value="passed" className="bg-[#18191e] text-slate-200">
-                              Healthy
+                              Looks good
                             </option>
                           </select>
                         </div>
@@ -223,7 +216,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                               )
                             }
                             className="h-full w-full cursor-pointer bg-transparent py-2 pl-3 pr-2 text-[10px] font-bold tracking-[0.08em] text-white/60 hover:text-white/80 outline-none"
-                            title="How many matching logs to list"
+                            title="How many matching snapshots to list"
                           >
                             <option value={10} className="bg-[#18191e] text-slate-200">
                               Show 10
@@ -271,7 +264,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                       {recentSnapshotsError ? (
                         <div className="p-8 text-center" data-testid="rg-logs-state-error">
                           <div className="text-xs font-medium uppercase tracking-widest text-rose-400">
-                            Unable to load recent snapshots
+                            Unable to load snapshots
                           </div>
                           <div className="mt-2 text-[11px] text-slate-400">
                             {recentSnapshotsErrorMessage}
@@ -296,23 +289,23 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                       ) : recentSnapshots.length === 0 ? (
                         <div className="p-8 text-center" data-testid="rg-logs-state-empty">
                           <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
-                            No baseline logs yet
+                            No snapshots yet
                           </div>
                           <div className="mt-2 text-[11px] text-slate-500">
-                            Generate traffic in Live View, then open this agent again.
+                            Capture traffic in Live View, then open this agent again.
                           </div>
                         </div>
                       ) : logsMatchCount === 0 ? (
                         <div className="p-8 text-center" data-testid="rg-logs-state-empty-filter">
                           <div className="text-xs font-medium uppercase tracking-widest text-slate-500">
                             {logsStatusFilter === "failed"
-                              ? "No flagged logs in this window"
+                              ? "No snapshots need review in this window"
                               : logsStatusFilter === "passed"
-                                ? "No healthy logs in this window"
-                                : "No logs match this filter"}
+                                ? "No healthy snapshots in this window"
+                                : "No snapshots match this filter"}
                           </div>
                           <div className="mt-2 text-[11px] text-slate-500">
-                            Try All, or raise Show limit if matching logs are further back.
+                            Try All, or raise Show limit if matching snapshots are further back.
                           </div>
                         </div>
                       ) : (
@@ -383,8 +376,8 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                                       </div>
                                       <p className="line-clamp-2 text-[12px] leading-relaxed text-slate-300">
                                         {shortText(
-                                          snap.user_message ?? snap.request_prompt ?? "—",
-                                          "—",
+                                          snap.user_message ?? snap.request_prompt ?? "",
+                                          "",
                                           90
                                         )}
                                       </p>
@@ -393,7 +386,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                                           className="truncate font-mono text-[9px] text-slate-600"
                                           title={String(snap.trace_id)}
                                         >
-                                          {String(snap.trace_id).slice(0, 14)}…
+                                          {String(snap.trace_id).slice(0, 14)}??
                                         </p>
                                       )}
                                     </div>
@@ -419,16 +412,16 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                     <div className="mb-3 rounded-xl border border-white/[0.06] bg-black/25 px-3 py-2 text-[10px] font-semibold text-slate-400">
                       {dataSource === "recent" && runSnapshotIds.length > 0 ? (
                         <span className="text-amber-200/90">
-                          Run source: {runSnapshotIds.length} live log
-                          {runSnapshotIds.length === 1 ? "" : "s"} (switch source below)
+                          {runSnapshotIds.length} live snapshot
+                          {runSnapshotIds.length === 1 ? "" : "s"} selected
                         </span>
                       ) : runDatasetIds.length > 0 ? (
                         <span className="text-fuchsia-300/90">
-                          Selected {runDatasetIds.length} dataset
-                          {runDatasetIds.length === 1 ? "" : "s"} for run
+                          {runDatasetIds.length} saved set
+                          {runDatasetIds.length === 1 ? "" : "s"} selected
                         </span>
                       ) : (
-                        <span>No dataset selected for run</span>
+                        <span>No saved set selected</span>
                       )}
                     </div>
                     {datasetsError ? (
@@ -437,7 +430,7 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                         data-testid="rg-datasets-state-error"
                       >
                         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-300">
-                          Unable to load saved datasets
+                          Unable to load saved sets
                         </div>
                         <div className="mt-2 text-[12px] text-slate-200">{datasetsErrorMessage}</div>
                         <button
@@ -453,14 +446,14 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                         className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-[12px] text-slate-500"
                         data-testid="rg-datasets-state-loading"
                       >
-                        Loading saved datasets...
+                        Loading saved sets...
                       </div>
                     ) : !datasets?.length ? (
                       <div
                         className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-[12px] text-slate-500"
                         data-testid="rg-datasets-state-empty"
                       >
-                        No saved datasets.
+                        No saved sets.
                         <div className="mt-2">
                           <Link
                             href={`/organizations/${orgId}/projects/${projectId}/live-view`}
@@ -596,8 +589,8 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                                                   {shortText(
                                                     snapshot.user_message ??
                                                       snapshot.request_prompt ??
-                                                      "—",
-                                                    "—",
+                                                      "",
+                                                    "",
                                                     88
                                                   )}
                                                 </div>
