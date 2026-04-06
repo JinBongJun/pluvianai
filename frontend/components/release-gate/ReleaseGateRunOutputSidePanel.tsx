@@ -58,7 +58,7 @@ export type ReleaseGateRunOutputSidePanelProps = {
   historyRefreshing: boolean;
   historyDeleteLocked: boolean;
   mutateHistory: () => void;
-  /** Shared with main History tab; used only to detect “default” filters for empty copy. */
+  /** Shared with main History tab; used only to detect ?쐂efault??filters for empty copy. */
   historyTraceId: string;
   deletingHistoryReportIds: string[];
   onDeleteHistorySession: (reportId: string) => void;
@@ -107,7 +107,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
 
   return (
     <RailwaySidePanel
-      title="Run output"
+      title="Results"
       headerEyebrow="After each run"
       footerStatusLabel="Validation session active"
       isOpen={true}
@@ -139,7 +139,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                 [
                   { id: "all" as const, label: "All" },
                   { id: "failed" as const, label: "Needs review" },
-                  { id: "passed" as const, label: "Healthy" },
+                  { id: "passed" as const, label: "Looks good" },
                 ] as const
               ).map(option => (
                 <button
@@ -163,12 +163,12 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
               <div className="flex flex-col items-center justify-center py-14 text-center opacity-70">
                 <Activity className="mb-4 h-8 w-8 text-white/40" />
                 <div className="text-sm font-semibold text-white/60">
-                  {!hasCompletedResults ? "Awaiting run" : "Latest result hidden"}
+                  {!hasCompletedResults ? "Waiting for a result" : "Latest result hidden"}
                 </div>
                 <p className="mt-1 text-[11px] leading-relaxed text-white/30">
                   {!hasCompletedResults
-                    ? "Select logs or datasets in the left panel, adjust options on the agent card, then press Start. Gate status and per-input rows show up here."
-                    : "Open History to inspect completed runs, or run again to generate a new result."}
+                    ? "Pick inputs on the left, review the candidate in the center, then run the experiment."
+                    : "Open History to inspect completed runs, or run the experiment again."}
                 </p>
               </div>
             ) : (
@@ -182,7 +182,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
-                          {reportIdx === 0 ? "Latest completed run" : `Previous run ${reportIdx}`}
+                          {reportIdx === 0 ? "Latest result" : `Earlier result ${reportIdx}`}
                         </div>
                         <div className="mt-1 text-[11px] text-white/45">
                           {formatDateTime(new Date(card.completedAtMs).toISOString())}
@@ -207,6 +207,21 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                           : "border-l-2 border-rose-500/50 bg-rose-500/5 text-rose-100"
                       )}
                     >
+                      <div className="flex items-center justify-between gap-3">
+                        <div
+                          className={clsx(
+                            "text-sm font-semibold",
+                            card.result.pass ? "text-emerald-200" : "text-rose-200"
+                          )}
+                        >
+                          {card.result.pass ? "Looks good" : "Needs review"}
+                        </div>
+                        <div className="text-[11px] text-white/45">
+                          {card.result.pass
+                            ? "All selected inputs passed."
+                            : "One or more inputs need review."}
+                        </div>
+                      </div>
                       <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/60">
                         <span>Inputs: {Number(card.result.total_inputs ?? 0)}</span>
                         <span className="h-1 w-1 rounded-full bg-white/20" />
@@ -233,10 +248,10 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                               </span>
                             </span>
                             <span className="text-emerald-400/90">
-                              Healthy {card.toolGroundingRunSummary.pass}
+                              Looks good {card.toolGroundingRunSummary.pass}
                             </span>
                             <span className="text-rose-400/90">
-                              Flagged {card.toolGroundingRunSummary.fail}
+                              Needs review {card.toolGroundingRunSummary.fail}
                             </span>
                             {card.toolGroundingRunSummary.semanticOk > 0 ? (
                               <span className="text-violet-300/90">
@@ -256,49 +271,56 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                       ) : null}
                     </div>
 
-                    <div className="flex flex-col gap-2">
-                      {card.visibleResultCases.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-white/30">
-                          {resultCaseFilter === "failed"
-                            ? "No failed or flaky inputs in this run."
-                            : resultCaseFilter === "passed"
-                              ? "No healthy inputs in this run."
-                              : "No per-input result rows returned for this run."}
-                        </div>
-                      ) : (
-                        card.visibleResultCases.map(({ run, caseIndex: idx }) => {
-                          const baselineSnapshotForRun =
-                            (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
-                              | Record<string, unknown>
-                              | undefined) ??
-                            (recentSnapshots.find(
-                              s =>
-                                String((s as Record<string, unknown>)?.id ?? "") ===
-                                String(run?.snapshot_id ?? "")
-                            ) as Record<string, unknown> | undefined) ??
-                            null;
+                    <details className="group rounded-2xl border border-white/8 bg-black/20" open={reportIdx === 0}>
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-white/80 marker:content-none">
+                        <span>View case results</span>
+                        <span className="text-[11px] text-white/35">Expand</span>`r`n                      </summary>
+                      <div className="border-t border-white/6 px-3 py-3">
+                        {card.visibleResultCases.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-white/30">
+                            {resultCaseFilter === "failed"
+                              ? "No inputs need review in this run."
+                              : resultCaseFilter === "passed"
+                                ? "No healthy inputs in this run."
+                                : "No per-input result rows returned for this run."}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            {card.visibleResultCases.map(({ run, caseIndex: idx }) => {
+                              const baselineSnapshotForRun =
+                                (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
+                                  | Record<string, unknown>
+                                  | undefined) ??
+                                (recentSnapshots.find(
+                                  s =>
+                                    String((s as Record<string, unknown>)?.id ?? "") ===
+                                    String(run?.snapshot_id ?? "")
+                                ) as Record<string, unknown> | undefined) ??
+                                null;
 
-                          return (
-                            <ResultCaseRowButton
-                              key={`${card.reportId}-${idx}`}
-                              run={run}
-                              idx={idx}
-                              repeatRunsFallback={card.result.repeat_runs ?? repeatRuns}
-                              baselineSnapshotForRun={baselineSnapshotForRun}
-                              onSelect={({ attempts, caseIndex, baselineSnapshot }) =>
-                                setDetailAttemptView({
-                                  attempts,
-                                  caseIndex,
-                                  initialAttemptIndex: 0,
-                                  baselineSnapshot,
-                                })
-                              }
-                              testId={`rg-result-report-${reportIdx}-case-${idx}`}
-                            />
-                          );
-                        })
-                      )}
-                    </div>
+                              return (
+                                <ResultCaseRowButton
+                                  key={`${card.reportId}-${idx}`}
+                                  run={run}
+                                  idx={idx}
+                                  repeatRunsFallback={card.result.repeat_runs ?? repeatRuns}
+                                  baselineSnapshotForRun={baselineSnapshotForRun}
+                                  onSelect={({ attempts, caseIndex, baselineSnapshot }) =>
+                                    setDetailAttemptView({
+                                      attempts,
+                                      caseIndex,
+                                      initialAttemptIndex: 0,
+                                      baselineSnapshot,
+                                    })
+                                  }
+                                  testId={`rg-result-report-${reportIdx}-case-${idx}`}
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </details>
                   </div>
                 ))}
               </div>
@@ -442,7 +464,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                                 Validation session
                               </div>
                               <div className="mt-1 text-[11px] text-white/45">
-                                {formatDateTime(group.createdAt)}{group.repeatRuns ? ` · ${group.repeatRuns}x each` : ""}
+                                {formatDateTime(group.createdAt)}{group.repeatRuns ? ` 쨌 ${group.repeatRuns}x each` : ""}
                               </div>
                             </div>
                             <button
