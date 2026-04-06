@@ -48,6 +48,9 @@ export function LiveIssueDetailDrawer({
 }) {
   const failedCount = evalRows.filter(row => row.status === "fail").length;
   const passedCount = evalRows.filter(row => row.status === "pass").length;
+  const failedRows = evalRows.filter(row => row.status === "fail");
+  const visibleRows = failedRows.length > 0 ? failedRows : evalRows.slice(0, 3);
+  const hiddenChecksCount = Math.max(evalRows.length - visibleRows.length, 0);
   const surfaceStatus: SurfaceStatus = buildSurfaceStatus({
     failedCount,
     passedCount,
@@ -112,10 +115,19 @@ export function LiveIssueDetailDrawer({
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-xs font-medium text-slate-500">Checks</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xs font-medium text-slate-500">
+              {failedRows.length > 0 ? "Checks to review" : "Checks"}
+            </h3>
+            {hiddenChecksCount > 0 ? (
+              <span className="text-xs text-slate-500">
+                {hiddenChecksCount} more {hiddenChecksCount === 1 ? "check" : "checks"} in full details
+              </span>
+            ) : null}
+          </div>
           <div className="space-y-2">
             {evalRows.length > 0 ? (
-              evalRows.map(row => (
+              visibleRows.map(row => (
                 <div
                   key={`${snapshot.id}-${row.id}`}
                   className="flex items-center justify-between rounded-xl border border-white/6 bg-white/[0.03] px-3 py-2 text-sm"
@@ -154,7 +166,7 @@ export function LiveIssueDetailDrawer({
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-white/8 px-5 py-4">
-        <p className="text-sm text-slate-500">Use Release Gate when this case needs a controlled rerun.</p>
+        <p className="text-sm text-slate-500">Review is a quick triage view. Open full details for raw request and payload data.</p>
         <div className="flex items-center gap-2">
           {releaseGateHref ? (
             <Link

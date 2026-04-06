@@ -6,6 +6,25 @@ export type SurfaceStatus = {
   tone: SurfaceStatusTone;
 };
 
+function mapFailedCheckToIssueTitle(failedEvalId?: string, failedEvalLabel?: string): string | null {
+  const normalized = String(failedEvalId || "")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return failedEvalLabel || null;
+
+  if (normalized.includes("json")) return "Response format issue";
+  if (normalized.includes("empty") || normalized.includes("short")) return "Weak response";
+  if (normalized.includes("latency")) return "Slow response";
+  if (normalized.includes("http")) return "HTTP error";
+  if (normalized.includes("refusal") || normalized.includes("non_answer") || normalized.includes("non-answer")) {
+    return "Refusal or non-answer";
+  }
+  if (normalized.includes("tool")) return "Tooling issue";
+
+  return failedEvalLabel || failedEvalId || null;
+}
+
 export function buildSurfaceStatus(args: {
   failedCount: number;
   passedCount: number;
@@ -55,8 +74,10 @@ export function buildIssueTitle(args: {
   failedCount: number;
 }): string {
   const { failedEvalId, failedEvalLabel, hasToolDefinitions, hasToolResults, failedCount } = args;
-  if (failedCount > 0 && failedEvalLabel) return failedEvalLabel;
-  if (failedCount > 0 && failedEvalId) return failedEvalId;
+  if (failedCount > 0) {
+    const mapped = mapFailedCheckToIssueTitle(failedEvalId, failedEvalLabel);
+    if (mapped) return mapped;
+  }
   if (hasToolDefinitions && !hasToolResults) return "Tool-assisted request";
   return "Latest response";
 }
