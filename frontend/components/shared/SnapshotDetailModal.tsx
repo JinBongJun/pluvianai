@@ -343,6 +343,7 @@ export function SnapshotDetailModal({
       }),
     [displayEvalRows, s.latency_ms]
   );
+  const isSafeSummary = riskSummary.level === "safe";
   const prioritizedEvalRows = React.useMemo(
     () =>
       [...displayEvalRows].sort((a, b) => {
@@ -460,9 +461,95 @@ export function SnapshotDetailModal({
                     </span>
                   </div>
                 ) : null}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {effectiveEvalEnabled &&
-                    prioritizedEvalRows.map(row => {
+                {isSafeSummary ? (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-200">
+                      All checks passed.
+                    </div>
+                    <details className="rounded-2xl border border-white/8 bg-black/10">
+                      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-slate-200">
+                        View checks
+                      </summary>
+                      <div className="border-t border-white/5 p-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          {effectiveEvalEnabled &&
+                            prioritizedEvalRows.map(row => {
+                              const detail = getEvalDetail(s, row.id, savedEvalConfig);
+                              const EvalIcon = EVAL_CHECK_ICONS[row.id] ?? Scale;
+                              return (
+                                <div
+                                  key={row.id}
+                                  className={clsx(
+                                    "p-5 rounded-[20px] flex flex-col items-center text-center gap-3 transition-colors",
+                                    isSavedAppearance
+                                      ? "bg-slate-800/40 border border-dashed border-slate-600/30"
+                                      : "bg-[#18191e] border border-white/5 hover:border-white/10"
+                                  )}
+                                >
+                                  <div
+                                    className={clsx(
+                                      "p-3 rounded-2xl",
+                                      isSavedAppearance
+                                        ? "bg-slate-600/30 border border-slate-500/20"
+                                        : "bg-blue-500/10 border border-blue-500/20"
+                                    )}
+                                  >
+                                    <EvalIcon
+                                      className={clsx(
+                                        "w-6 h-6",
+                                        isSavedAppearance ? "text-slate-400" : "text-blue-400"
+                                      )}
+                                    />
+                                  </div>
+                                  <span
+                                    className={clsx(
+                                      "text-sm font-medium mt-1 line-clamp-1",
+                                      isSavedAppearance ? "text-slate-400" : "text-slate-200"
+                                    )}
+                                    title={getEvalCheckLabel(row.id)}
+                                  >
+                                    {getEvalCheckLabel(row.id, row.id)}
+                                  </span>
+                                  <div className="flex-1" />
+                                  {(detail.actualStr !== "?" || detail.configStr !== "?") && (
+                                    <div className="flex flex-col items-center gap-1 text-xs font-mono mb-2">
+                                      {detail.actualStr !== "?" ? (
+                                        <span className={clsx(isSavedAppearance ? "text-slate-400" : "text-slate-300")}>
+                                          {detail.actualStr}
+                                        </span>
+                                      ) : null}
+                                      {detail.configStr !== "?" ? (
+                                        <span className="text-[10px] text-slate-500">
+                                          {detail.actualStr !== "?"
+                                            ? `Threshold: ${detail.configStr}`
+                                            : detail.configStr}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  )}
+                                  <span
+                                    className={clsx(
+                                      "px-3 py-1 text-xs font-black uppercase tracking-widest rounded-xl w-full",
+                                      row.status === "pass"
+                                        ? isSavedAppearance
+                                          ? "bg-emerald-500/20 text-emerald-300"
+                                          : "bg-emerald-500/10 text-emerald-400"
+                                        : "bg-slate-500/10 text-slate-500"
+                                    )}
+                                  >
+                                    {formatEvalStatus(row.status)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {effectiveEvalEnabled &&
+                      prioritizedEvalRows.map(row => {
                       const detail = getEvalDetail(s, row.id, savedEvalConfig);
                       const EvalIcon = EVAL_CHECK_ICONS[row.id] ?? Scale;
                       return (
@@ -546,7 +633,8 @@ export function SnapshotDetailModal({
                         </div>
                       );
                     })}
-                </div>
+                  </div>
+                )}
                 {effectiveEvalEnabled && displayEvalRows.length === 0 && (
                   <p
                     className={clsx(
@@ -573,16 +661,19 @@ export function SnapshotDetailModal({
                 ) : null}
               </div>
 
-              <div className="flex flex-col gap-6 rounded-[24px] border border-white/5 bg-[#0f1115] p-6 shadow-inner">
-                <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-                  <SlidersHorizontal className="h-5 w-5 text-fuchsia-400" />
-                  <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
-                    Technical Details
-                  </span>
-                </div>
-                <p className="text-xs leading-relaxed text-slate-500">
-                  Request structure, captured context, and execution traces for deeper inspection.
-                </p>
+              <details className="rounded-[24px] border border-white/5 bg-[#0f1115] shadow-inner">
+                <summary className="cursor-pointer list-none px-6 py-5">
+                  <div className="flex items-center gap-3">
+                    <SlidersHorizontal className="h-5 w-5 text-fuchsia-400" />
+                    <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
+                      Technical Details
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                    Request structure, captured context, and execution traces for deeper inspection.
+                  </p>
+                </summary>
+                <div className="px-6 pb-6 flex flex-col gap-6">
 
                 <div className="rounded-[20px] border border-white/5 bg-black/10 p-6 shadow-inner">
                 <div className="flex items-center gap-3 border-b border-white/5 pb-3">
@@ -883,8 +974,9 @@ export function SnapshotDetailModal({
                     </div>
                   ))}
                 </div>
-              </div>
-              </div>
+                </div>
+                </div>
+              </details>
             </div>
           </div>
         </div>

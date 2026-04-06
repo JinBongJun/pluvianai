@@ -105,7 +105,7 @@ export function buildSnapshotRiskSummary(options: {
     return {
       level: "safe",
       category: "response_quality",
-      categoryLabel: "No Active Risk",
+      categoryLabel: "No Issues Found",
       headline: "This run looks safe",
       impact: "No saved evaluation checks failed on this snapshot.",
       failedCheckLabels: [],
