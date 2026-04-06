@@ -1,23 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Clock,
-  ShieldCheck,
-  ChevronDown,
-  Activity,
-  Scale,
-  Terminal,
-  Square,
-  CheckSquare,
-  Save,
-  Hash,
-  AlignLeft,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  Trash2,
-} from "lucide-react";
-import clsx from "clsx";
+import { Terminal } from "lucide-react";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
 import type { LiveViewRequestOverview, RequestContextMeta } from "@/lib/api/live-view";
 import { getRateLimitInfo, isRateLimitError } from "@/lib/api/client";
@@ -28,8 +11,13 @@ import { SnapshotDetailModal } from "@/components/shared/SnapshotDetailModal";
 import { useToast } from "@/components/ToastContainer";
 import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { logger } from "@/lib/logger";
-import { getEnabledCheckIdsFromConfig, getEvalDetail } from "@/lib/evalPresentation";
+import { getEnabledCheckIdsFromConfig, getEvalCheckLabel } from "@/lib/evalPresentation";
 import { getProjectPermissionToast } from "@/lib/projectAccess";
+import { LiveIssueDetailDrawer } from "@/components/live-view/LiveIssueDetailDrawer";
+import { LiveIssueRow } from "@/components/live-view/LiveIssueRow";
+import { LiveIssuesToolbar } from "@/components/live-view/LiveIssuesToolbar";
+import { LiveSaveToDatasetsModal } from "@/components/live-view/LiveSaveToDatasetsModal";
+import { buildLiveIssueRowModel } from "@/components/live-view/liveIssueRowModel";
 
 interface EvaluationMetric {
   score: number;
@@ -87,15 +75,15 @@ const CLINICAL_LOG_MAX_POLL_MS = 30000;
 type RiskFilter = "all" | "worst" | "healthy";
 const RISK_FILTER_LABELS: Record<RiskFilter, string> = {
   all: "All",
-  worst: "Flagged",
-  healthy: "Healthy",
+  worst: "Needs attention",
+  healthy: "Looks good",
 };
 type SortMode = "newest" | "oldest" | "latency_desc" | "latency_asc";
 const SORT_MODE_LABELS: Record<SortMode, string> = {
   newest: "Newest",
   oldest: "Oldest",
-  latency_desc: "Latency high",
-  latency_asc: "Latency low",
+  latency_desc: "Slowest",
+  latency_asc: "Fastest",
 };
 type PolicyState = {
   status: "idle" | "loading" | "pass" | "fail" | "error";
@@ -128,7 +116,7 @@ function formatPrettyTime(value?: string): string {
 }
 
 function safeStringify(val: unknown): string {
-  if (val === null || val === undefined || val === "") return "—";
+  if (val === null || val === undefined || val === "") return "-";
   if (typeof val === "string") return val;
   if (typeof val === "object") {
     try {
@@ -327,6 +315,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
 }) => {
   const toast = useToast();
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [detailModalId, setDetailModalId] = React.useState<string | null>(null);
   const [recentTraceLimit, setRecentTraceLimit] = React.useState<number>(DEFAULT_LAST_N_RUNS);
   const [riskFilter, setRiskFilter] = React.useState<RiskFilter>("all");
   const [sortMode, setSortMode] = React.useState<SortMode>("newest");
@@ -471,34 +460,35 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     [data?.total_count, data?.count, snapshots.length]
   );
 
-  // List uses light mode (no payload/long text); detail modal always needs full snapshot. Cache by (projectId, snapshotId).
+  const activeDetailSnapshotId = detailModalId ?? expandedId;
+  // List uses light mode (no payload/long text); issue drawer / detail modal need full snapshot. Cache by (projectId, snapshotId).
   const snapshotDetailCacheRef = React.useRef<Map<string, ClinicalSnapshot>>(new Map());
   const [detailFetchedSnapshot, setDetailFetchedSnapshot] = React.useState<ClinicalSnapshot | null>(
     null
   );
   React.useEffect(() => {
-    if (!expandedId || !projectId) {
+    if (!activeDetailSnapshotId || !projectId) {
       setDetailFetchedSnapshot(null);
       return;
     }
-    const cacheKey = `${projectId}-${expandedId}`;
+    const cacheKey = `${projectId}-${activeDetailSnapshotId}`;
     const cached = snapshotDetailCacheRef.current.get(cacheKey);
     if (cached) {
       setDetailFetchedSnapshot(cached);
       return;
     }
-    const s = snapshots.find(snap => String(snap.id) === String(expandedId));
+    const s = snapshots.find(snap => String(snap.id) === String(activeDetailSnapshotId));
     setDetailFetchedSnapshot(null);
     liveViewAPI
-      .getSnapshot(projectId, expandedId)
+      .getSnapshot(projectId, activeDetailSnapshotId)
       .then((full: Record<string, unknown>) => {
-        if (!full || String(full.id) !== String(expandedId)) return;
+        if (!full || String(full.id) !== String(activeDetailSnapshotId)) return;
         const merged = (s ? ({ ...s, ...full } as unknown) : (full as unknown)) as ClinicalSnapshot;
         snapshotDetailCacheRef.current.set(cacheKey, merged);
         setDetailFetchedSnapshot(merged);
       })
       .catch(() => {});
-  }, [expandedId, projectId, snapshots]);
+  }, [activeDetailSnapshotId, projectId, snapshots]);
 
   const { data: evalData } = useSWR(
     projectId && agentId ? ["agent-eval-runtime", projectId, agentId, recentTraceLimit] : null,
@@ -553,8 +543,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       return rows.reduce((acc, row) => {
         const st = row.status;
         // Evaluation rules:
-        // - "fail"     → counts as failure
-        // - "pass"     → counts as success
+        // - "fail"     ??counts as failure
+        // - "pass"     ??counts as success
         // - anything else (e.g. "not_applicable", "skipped") is treated as neutral
         return st === "fail" ? acc + 1 : acc;
       }, 0);
@@ -896,164 +886,56 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   }
 
   const isEmptyResult = visibleSnapshots.length === 0;
+  const expandedSnapshot = React.useMemo(() => {
+    if (!expandedId) return null;
+    const fromList = snapshots.find(snap => String(snap.id) === String(expandedId));
+    if (!fromList) return null;
+    if (detailFetchedSnapshot && String(detailFetchedSnapshot.id) === String(expandedId)) {
+      return detailFetchedSnapshot;
+    }
+    return fromList;
+  }, [detailFetchedSnapshot, expandedId, snapshots]);
 
   const mainContent = (
-    <div className="flex h-0 flex-1 min-h-0 flex-col overflow-hidden bg-[#111216]">
-      {/* Log Header Summary */}
-      <div className="p-5 flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e]">
-        <div className="flex items-center">
-          <span className="px-2 py-0.5 rounded-md text-[13px] font-mono text-slate-400 capitalize tracking-wide">
-            Showing {visibleSnapshots.length} of {totalSnapshotsCount} logs
-            {totalSnapshotsCount > recentTraceLimit ? ` · cap ${recentTraceLimit}` : ""}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 flex-wrap justify-end">
-          {/* Risk Filter - Pill Tabs */}
-          <div className="flex items-center p-1 rounded-xl bg-[#030806] border border-white/[0.04] shadow-inner">
-            {(["all", "worst", "healthy"] as RiskFilter[]).map(mode => (
-              <button
-                key={mode}
-                onClick={() => setRiskFilter(mode)}
-                title={
-                  mode === "worst"
-                    ? "Flagged: Issues detected"
-                    : mode === "healthy"
-                      ? "Healthy: No issues"
-                      : "All"
-                }
-                className={clsx(
-                  "px-3 py-1.5 rounded-lg text-[12px] font-bold tracking-wide transition-all",
-                  riskFilter === mode
-                    ? "bg-white/[0.08] text-white shadow-sm"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]"
-                )}
-              >
-                {RISK_FILTER_LABELS[mode]}
-              </button>
-            ))}
-          </div>
-
-          <div className="w-px h-4 bg-white/10 hidden md:block" />
-
-          {/* Show limit */}
-          <div className="bg-[#030806] border border-white/[0.04] rounded-xl hover:border-white/10 transition-colors focus-within:border-emerald-500/50">
-            <label className="sr-only" htmlFor="clinical-log-show-limit">
-              Show logs limit
-            </label>
-            <select
-              id="clinical-log-show-limit"
-              value={recentTraceLimit}
-              onChange={e => void saveRecentTraceLimit(Number(e.target.value))}
-              className="pl-3 pr-2 py-1.5 bg-transparent text-xs font-bold tracking-[0.08em] text-slate-300 outline-none cursor-pointer"
-              title={`Show logs limit (${MIN_LAST_N_RUNS} to ${MAX_LAST_N_RUNS})`}
-            >
-              {LOG_LIMIT_OPTIONS.map(limit => (
-                <option key={limit} value={limit} className="bg-[#18191e] text-slate-200">
-                  {`Show ${limit}`}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Sort */}
-          <div className="bg-[#030806] border border-white/[0.04] rounded-xl hover:border-white/10 transition-colors focus-within:border-emerald-500/50">
-            <select
-              value={sortMode}
-              onChange={e => setSortMode(e.target.value as SortMode)}
-              className="pl-3 pr-2 py-1.5 bg-transparent text-xs font-bold tracking-[0.08em] text-slate-300 outline-none cursor-pointer"
-            >
-              {(Object.keys(SORT_MODE_LABELS) as SortMode[]).map(mode => (
-                <option key={mode} value={mode} className="bg-[#18191e] text-slate-200">
-                  {SORT_MODE_LABELS[mode]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="w-px h-4 bg-white/10 hidden md:block" />
-
-          {/* Save selection to datasets (playlist-style) */}
-          <button
-            onClick={() => {
-              setIsSelectMode(m => !m);
-              setIsRemoveMode(false);
-              setSelectedRemoveIds(new Set());
-              if (isSelectMode) setSelectedIds(new Set());
-            }}
-            className={clsx(
-              "px-4 py-1.5 rounded-xl border text-[12px] font-bold uppercase tracking-wide transition-all flex items-center gap-2",
-              isSelectMode
-                ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300"
-                : "bg-[#030806] border-white/[0.04] text-slate-300 hover:border-white/10 hover:bg-white/[0.05]"
-            )}
-          >
-            {isSelectMode ? <XCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            {isSelectMode ? "Cancel" : "Save"}
-          </button>
-
-          {isSelectMode && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={selectAll}
-                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold tracking-[0.08em] text-slate-300 hover:bg-white/[0.05]"
-              >
-                {selectedIds.size === visibleSnapshots.length ? "Deselect" : "Select all"}
-              </button>
-              <button
-                onClick={openSaveToDatasetsModal}
-                disabled={selectedIds.size === 0}
-                className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-[12px] font-bold tracking-[0.08em] text-emerald-300 hover:bg-emerald-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {isSavingToDatasets ? "Saving..." : `Save (${selectedIds.size})`}
-              </button>
-            </div>
-          )}
-
-          {/* Delete from project history */}
-          <button
-            onClick={() => {
-              setIsRemoveMode(m => !m);
-              setIsSelectMode(false);
-              setSelectedIds(new Set());
-              if (!isRemoveMode) {
-                setSelectedRemoveIds(new Set());
-              }
-            }}
-            className={clsx(
-              "px-4 py-1.5 rounded-xl border text-[12px] font-bold uppercase tracking-wide transition-all flex items-center gap-2",
-              isRemoveMode
-                ? "bg-rose-500/20 border-rose-500/30 text-rose-300"
-                : "bg-[#030806] border-white/[0.04] text-slate-300 hover:border-white/10 hover:bg-white/[0.05]"
-            )}
-          >
-            {isRemoveMode ? <XCircle className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
-            {isRemoveMode ? "Cancel" : "Delete"}
-          </button>
-
-          {isRemoveMode && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={selectAllForRemove}
-                className="px-3 py-1.5 rounded-xl bg-[#030806] border border-white/[0.04] text-[12px] font-bold tracking-[0.08em] text-slate-300 hover:bg-white/[0.05]"
-              >
-                {selectedRemoveIds.size === visibleSnapshots.length ? "Deselect" : "Select all"}
-              </button>
-              <button
-                onClick={() => void deleteSelectedSnapshots()}
-                disabled={selectedRemoveIds.size === 0 || isDeletingSnapshots}
-                className="px-3 py-1.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-[12px] font-bold tracking-[0.08em] text-rose-300 hover:bg-rose-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {isDeletingSnapshots
-                  ? "Deleting..."
-                  : selectedRemoveIds.size === 0
-                    ? "Delete"
-                    : `Delete (${selectedRemoveIds.size})`}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="relative flex h-0 flex-1 min-h-0 flex-col overflow-hidden bg-[#111216]">
+      <LiveIssuesToolbar
+        visibleCount={visibleSnapshots.length}
+        totalCount={totalSnapshotsCount}
+        recentTraceLimit={recentTraceLimit}
+        riskFilter={riskFilter}
+        riskFilterLabels={RISK_FILTER_LABELS}
+        sortMode={sortMode}
+        sortLabels={SORT_MODE_LABELS}
+        logLimitOptions={LOG_LIMIT_OPTIONS}
+        onRiskFilterChange={setRiskFilter}
+        onRecentTraceLimitChange={value => void saveRecentTraceLimit(value)}
+        onSortModeChange={setSortMode}
+        isSelectMode={isSelectMode}
+        isRemoveMode={isRemoveMode}
+        selectedIdsSize={selectedIds.size}
+        selectedRemoveIdsSize={selectedRemoveIds.size}
+        visibleSnapshotsCount={visibleSnapshots.length}
+        isSavingToDatasets={isSavingToDatasets}
+        isDeletingSnapshots={isDeletingSnapshots}
+        onToggleSelectMode={() => {
+          setIsSelectMode(mode => !mode);
+          setIsRemoveMode(false);
+          setSelectedRemoveIds(new Set());
+          if (isSelectMode) setSelectedIds(new Set());
+        }}
+        onToggleRemoveMode={() => {
+          setIsRemoveMode(mode => !mode);
+          setIsSelectMode(false);
+          setSelectedIds(new Set());
+          if (!isRemoveMode) {
+            setSelectedRemoveIds(new Set());
+          }
+        }}
+        onSelectAll={selectAll}
+        onSelectAllForRemove={selectAllForRemove}
+        onOpenSaveModal={openSaveToDatasetsModal}
+        onDeleteSelected={() => void deleteSelectedSnapshots()}
+      />
       {error && !planError && (
         <div className="mx-4 mb-3 px-3 py-2 rounded-xl border border-rose-500/30 bg-rose-500/10 flex items-center justify-between gap-3">
           <span className="text-xs text-rose-300 font-medium">
@@ -1088,38 +970,29 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
               ) : isRemoveMode ? (
                 <div className="w-8 shrink-0 text-center">DEL</div>
               ) : (
-                <div className="w-[4.5rem] shrink-0 pl-1 capitalize">time</div>
+                <div className="w-[14rem] shrink-0 capitalize">issue</div>
               )}
-
-              <div className="w-px h-3 bg-transparent hidden md:block shrink-0 mx-1" />
-
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="w-24 shrink-0 capitalize">model</div>
-                {evalEnabled && (
-                  <div className="w-14 shrink-0 flex justify-center capitalize">eval</div>
-                )}
-                <div className="flex-1 ml-2 capitalize">prompt / user input</div>
-              </div>
+              <div className="flex-1 min-w-0 capitalize">case</div>
             </div>
 
             <div className="flex items-center gap-4 shrink-0 pr-2">
-              <div className="w-16 shrink-0 text-right capitalize">latency</div>
-              <div className="w-6 shrink-0" />
+              <div className="w-[13rem] shrink-0 capitalize">status</div>
+              <div className="w-[8rem] shrink-0 text-right capitalize">action</div>
             </div>
           </div>
 
           {isEmptyResult ? (
             <div className="p-10 text-center space-y-4 m-6 border border-dashed border-white/5 rounded-3xl">
               <Terminal className="w-8 h-8 text-slate-700 mx-auto" />
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide leading-relaxed">
+              <p className="text-sm font-medium text-slate-500 leading-relaxed">
                 {riskFilter === "all"
-                  ? "No logs yet for this agent. Run the agent and this panel will auto-refresh every few seconds."
-                  : `No logs match ${RISK_FILTER_LABELS[riskFilter]} filter. Try All or raise Show limit.`}
+                  ? "No issues yet for this agent. New runs will appear here automatically."
+                  : `No issues match ${RISK_FILTER_LABELS[riskFilter]}. Try All or raise Show limit.`}
               </p>
               {riskFilter !== "all" && (
                 <button
                   onClick={() => setRiskFilter("all")}
-                  className="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/10 text-xs font-bold uppercase tracking-wide text-slate-200 hover:bg-white/[0.06]"
+                  className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
                 >
                   Show all
                 </button>
@@ -1129,238 +1002,132 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
             <div className="flex flex-col">
               {visibleSnapshots.map(s => {
                 const isExpanded = expandedId === s.id;
-                const date = new Date(s.created_at);
-                const timeStr = date.toLocaleTimeString("en-US", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true,
-                });
-                const timeMain = timeStr.split(" ")[0] || timeStr;
-                const timeAmPm = timeStr.split(" ")[1] || "";
                 const fullTime = formatPrettyTime(s.created_at);
-                const stepLogs = extractStepLogs(s);
                 const toolNames = extractToolNames(s);
                 const toolDefinitionCount = getToolDefinitionCount(s, toolNames);
                 const hasPolicyContext = toolDefinitionCount > 0;
                 const captureStateBadge = getCaptureStateBadge(s);
                 const requestShapeBadges = getRequestShapeBadges(s);
-                const customCode = extractCustomCode(s);
                 const traceKey = String(s.trace_id || "");
                 const policyState = policyByTrace[traceKey] ||
                   policyByTrace[String(s.id)] || { status: "idle" as const };
                 const evalRows = getSnapshotEvalRows(s);
-                const snapshotRules = Array.isArray(policyState.ruleSnapshot)
-                  ? policyState.ruleSnapshot
-                  : [];
-                const policyRulesForRun =
-                  snapshotRules.length > 0
-                    ? snapshotRules.map((snapRule: Record<string, unknown>) => {
-                        const ruleId = String(snapRule?.id || "");
-                        const currentRule = configuredPolicyMap.get(ruleId) as
-                          | Record<string, unknown>
-                          | undefined;
-                        return {
-                          id: ruleId || `snapshot-${String(s.id)}`,
-                          name: String(
-                            snapRule?.name ?? currentRule?.name ?? `Rule ${ruleId || "snapshot"}`
-                          ),
-                          scope_type: (currentRule?.scope_type as string) || "snapshot",
-                          scope_ref: (currentRule?.scope_ref as string) ?? "",
-                          rule_json:
-                            (snapRule?.rule_json as object) ??
-                            (currentRule?.rule_json as object) ??
-                            {},
-                        };
-                      })
-                    : configuredPolicies;
-                const canEvaluatePolicy =
-                  Boolean(s.trace_id) && configuredPolicies.length > 0 && hasPolicyContext;
 
                 // Simple analysis
                 const failedCount = getSnapshotFailedCount(s);
-                const isHealthy = failedCount === 0;
                 const passedCount = evalRows.filter(r => r.status === "pass").length;
-                const successLike =
-                  !s.is_worst &&
-                  (s.status_code == null || (s.status_code >= 200 && s.status_code < 400));
+                const firstFailedEvalId = evalRows.find(r => r.status === "fail")?.id;
+                const actionHref =
+                  orgId && toolDefinitionCount > 0
+                    ? `/organizations/${orgId}/projects/${projectId}/release-gate`
+                    : null;
+                const { issueTitle, casePreview, modelLabel, surfaceStatus, actionLabel } =
+                  buildLiveIssueRowModel({
+                    requestText: s.request_prompt || s.user_message,
+                    model: s.model,
+                    failedEvalId: firstFailedEvalId,
+                    failedEvalLabel: firstFailedEvalId
+                      ? getEvalCheckLabel(firstFailedEvalId, "Check failed")
+                      : undefined,
+                    hasToolDefinitions: toolDefinitionCount > 0,
+                    hasToolResults: Boolean(s.has_tool_results),
+                    failedCount,
+                    passedCount,
+                    evalRowsCount: evalRows.length,
+                    actionHref,
+                  });
 
                 return (
-                  <div
+                  <LiveIssueRow
                     key={s.id}
-                    className={clsx(
-                      "group transition-colors duration-200 overflow-hidden border-b border-white/[0.04]",
-                      isExpanded
-                        ? clsx(
-                            "bg-white/[0.02]",
-                            failedCount > 0
-                              ? "border-l-[2px] border-l-rose-500/40"
-                              : passedCount > 0
-                                ? "border-l-[2px] border-l-emerald-500/40"
-                                : "border-l-[2px] border-l-emerald-500/20"
-                          )
-                        : clsx(
-                            "border-l-[2px] border-l-transparent",
-                            failedCount > 0
-                              ? "bg-rose-500/[0.03] hover:bg-rose-500/[0.06]"
-                              : passedCount > 0
-                                ? "bg-emerald-500/[0.02] hover:bg-emerald-500/[0.04]"
-                                : "bg-transparent hover:bg-white/[0.02]"
-                          )
-                    )}
-                  >
-                    {/* Summary Line */}
-                    <div
-                      onClick={() => {
-                        if (isSelectMode) {
-                          toggleSelect(String(s.id));
-                        } else if (isRemoveMode) {
-                          toggleRemoveSelect(String(s.id));
-                        } else {
-                          setExpandedId(isExpanded ? null : s.id);
-                        }
-                      }}
-                      className="py-3 px-6 flex items-center justify-between cursor-pointer"
-                    >
-                      <div className="flex items-center gap-4 min-w-0 flex-1 pr-4">
-                        {isSelectMode ? (
-                          <div className="flex flex-col items-center justify-center w-8 shrink-0">
-                            {selectedIds.has(String(s.id)) ? (
-                              <CheckSquare className="w-4 h-4 text-emerald-400" />
-                            ) : (
-                              <Square className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors" />
-                            )}
-                          </div>
-                        ) : isRemoveMode ? (
-                          <div className="flex flex-col items-center justify-center w-8 shrink-0">
-                            {selectedRemoveIds.has(String(s.id)) ? (
-                              <CheckSquare className="w-4 h-4 text-rose-400" />
-                            ) : (
-                              <Square className="w-4 h-4 text-slate-600 group-hover:text-rose-400 transition-colors" />
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 shrink-0 w-[4.5rem]">
-                            <div
-                              className={clsx(
-                                "w-1.5 h-1.5 rounded-full shrink-0",
-                                failedCount > 0
-                                  ? "bg-rose-500/80 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
-                                  : passedCount > 0
-                                    ? "bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.3)]"
-                                    : "bg-slate-600/50"
-                              )}
-                            />
-                            <div className="flex items-baseline gap-1" title={fullTime}>
-                              <span className="text-[13px] font-medium text-slate-300 font-mono tracking-widest">
-                                {timeMain}
-                              </span>
-                              <span className="text-[11px] font-bold text-slate-500 uppercase">
-                                {timeAmPm}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="w-px h-3 bg-white/5 hidden md:block shrink-0 mx-1" />
-
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <span className="text-[14px] font-medium text-slate-200 truncate shrink-0 w-24">
-                            {s.model.split("/")[1] || s.model}
-                          </span>
-
-                          {evalEnabled && evalRows.length > 0 && (
-                            <div
-                              className={clsx(
-                                "shrink-0 px-2.5 py-0.5 rounded-full border text-[11px] font-bold uppercase tracking-widest flex items-center",
-                                failedCount > 0
-                                  ? "border-rose-500/20 bg-rose-500/10 text-rose-500/90"
-                                  : "border-emerald-500/20 bg-emerald-500/10 text-emerald-500/90"
-                              )}
-                            >
-                              EVAL: {failedCount > 0 ? "FLAGGED" : "HEALTHY"}
-                            </div>
-                          )}
-                          {toolDefinitionCount > 0 && (
-                            <div
-                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-400/90 text-[11px] font-bold uppercase tracking-widest flex items-center gap-1"
-                              title={
-                                toolNames.length > 0
-                                  ? `Tools: ${toolNames.join(", ")}`
-                                  : `${toolDefinitionCount} tool definition${toolDefinitionCount === 1 ? "" : "s"} captured on this request.`
-                              }
-                            >
-                              Tool{toolDefinitionCount !== 1 ? "s" : ""}:{" "}
-                              {toolNames.length > 0
-                                ? toolNames.length > 2
-                                  ? `${toolNames.length} calls`
-                                  : toolNames.join(", ")
-                                : toolDefinitionCount}
-                            </div>
-                          )}
-                          {s.has_tool_results ? (
-                            <div
-                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-400/90 text-[11px] font-bold uppercase tracking-widest"
-                              title="Tool result evidence captured (ingest or trajectory)"
-                            >
-                              Result
-                            </div>
-                          ) : null}
-                          {requestShapeBadges.map(badge => (
-                            <div
-                              key={badge.label}
-                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-cyan-500/25 bg-cyan-500/10 text-cyan-200/90 text-[11px] font-bold uppercase tracking-widest"
-                              title={badge.title}
-                            >
-                              {badge.label}
-                            </div>
-                          ))}
-                          {captureStateBadge ? (
-                            <div
-                              className="shrink-0 px-2.5 py-0.5 rounded-full border border-amber-500/25 bg-amber-500/10 text-amber-300/90 text-[11px] font-bold uppercase tracking-widest"
-                              title={captureStateBadge.title}
-                            >
-                              {captureStateBadge.label}
-                            </div>
-                          ) : null}
-
-                          <p className="text-[14px] text-slate-300 truncate flex-1 ml-2">
-                            {s.request_prompt || s.user_message || "—"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4 shrink-0">
-                        <div className="flex items-center gap-2 justify-end w-20">
-                          <span className="text-xs font-bold text-slate-500 capitalize hidden lg:block">
-                            latency
-                          </span>
-                          <span className="text-[13px] font-mono font-bold text-slate-300">
-                            {s.latency_ms != null ? `${s.latency_ms}ms` : "—"}
-                          </span>
-                        </div>
-                        <div
-                          className={clsx(
-                            "w-6 h-6 rounded-md flex items-center justify-center transition-all duration-300",
-                            isExpanded
-                              ? "bg-white/10 text-white shadow-lg"
-                              : "bg-white/[0.03] text-slate-400 group-hover:bg-white/10 group-hover:text-white"
-                          )}
-                        >
-                          <ChevronDown
-                            className={clsx(
-                              "w-3.5 h-3.5 transition-transform duration-300",
-                              isExpanded && "rotate-180"
-                            )}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    id={s.id}
+                    isExpanded={isExpanded}
+                    isSelectMode={isSelectMode}
+                    isRemoveMode={isRemoveMode}
+                    isSelected={selectedIds.has(String(s.id))}
+                    isRemoveSelected={selectedRemoveIds.has(String(s.id))}
+                    issueTitle={issueTitle}
+                    fullTime={fullTime}
+                    modelLabel={modelLabel}
+                    casePreview={casePreview}
+                    surfaceStatus={surfaceStatus}
+                    toolDefinitionCount={toolDefinitionCount}
+                    captureStateBadge={captureStateBadge}
+                    requestShapeBadges={requestShapeBadges}
+                    failedCount={failedCount}
+                    passedCount={passedCount}
+                    actionHref={actionHref}
+                    actionLabel={actionLabel}
+                    onToggleRow={() => {
+                      if (isSelectMode) {
+                        toggleSelect(String(s.id));
+                      } else if (isRemoveMode) {
+                        toggleRemoveSelect(String(s.id));
+                      } else {
+                        setExpandedId(isExpanded ? null : s.id);
+                      }
+                    }}
+                  />
                 );
               })}
             </div>
           )}
         </div>
+        <AnimatePresence>
+          {expandedSnapshot && (
+            <motion.aside
+              initial={{ x: 24, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 24, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="absolute inset-y-6 right-6 z-30"
+            >
+              <LiveIssueDetailDrawer
+                snapshot={expandedSnapshot}
+                detailSnapshot={detailFetchedSnapshot as Record<string, unknown> | null}
+                issueTitle={
+                  buildLiveIssueRowModel({
+                    requestText: expandedSnapshot.request_prompt || expandedSnapshot.user_message,
+                    model: expandedSnapshot.model,
+                    failedEvalId: toEvalRows(expandedSnapshot as unknown as Record<string, unknown>).find(
+                      row => row.status === "fail"
+                    )?.id,
+                    failedEvalLabel: getEvalCheckLabel(
+                      toEvalRows(expandedSnapshot as unknown as Record<string, unknown>).find(
+                        row => row.status === "fail"
+                      )?.id || "",
+                      "Check failed"
+                    ),
+                    hasToolDefinitions:
+                      getToolDefinitionCount(expandedSnapshot, extractToolNames(expandedSnapshot)) > 0,
+                    hasToolResults: Boolean(expandedSnapshot.has_tool_results),
+                    failedCount: getSnapshotFailedCount(expandedSnapshot),
+                    passedCount: toEvalRows(expandedSnapshot as unknown as Record<string, unknown>).filter(
+                      row => row.status === "pass"
+                    ).length,
+                    evalRowsCount: toEvalRows(expandedSnapshot as unknown as Record<string, unknown>).length,
+                    actionHref: orgId
+                      ? `/organizations/${orgId}/projects/${projectId}/release-gate`
+                      : null,
+                  }).issueTitle
+                }
+                toolDefinitionCount={getToolDefinitionCount(
+                  expandedSnapshot,
+                  extractToolNames(expandedSnapshot)
+                )}
+                evalRows={toEvalRows(expandedSnapshot as unknown as Record<string, unknown>)}
+                releaseGateHref={
+                  orgId
+                    ? `/organizations/${orgId}/projects/${projectId}/release-gate`
+                    : undefined
+                }
+                formatPrettyTime={formatPrettyTime}
+                onClose={() => setExpandedId(null)}
+                onOpenFullDetails={() => setDetailModalId(expandedId)}
+              />
+            </motion.aside>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -1368,161 +1135,32 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   return (
     <>
       {mainContent}
-      {/* Save to datasets modal */}
-      <AnimatePresence>
-        {isSaveModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#050814] shadow-2xl overflow-hidden"
-            >
-              <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-black text-slate-100 uppercase tracking-[0.18em]">
-                    Save logs to datasets
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Select existing datasets for this agent or create a new one.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeSaveModal}
-                  className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-slate-100 hover:bg-white/5 transition-colors"
-                  aria-label="Close"
-                  disabled={isSavingToDatasets}
-                >
-                  <XCircle className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono text-emerald-300">
-                    {snapshotIdsToSave.length} log{snapshotIdsToSave.length !== 1 ? "s" : ""}{" "}
-                    selected
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    Node-scoped only. Datasets from other nodes are hidden.
-                  </span>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                      Existing datasets
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      {datasetsForSave.length} available
-                    </span>
-                  </div>
-                  {datasetsForSave.length === 0 ? (
-                    <div className="px-3 py-2 rounded-lg border border-dashed border-white/10 text-[11px] text-slate-500">
-                      No datasets yet. Create a new dataset below.
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {datasetsForSave.map(ds => {
-                        const id = String(ds.id);
-                        const label = (ds.label?.trim() || `Dataset ${id.slice(0, 8)}`) as string;
-                        const count = typeof ds.snapshot_count === "number" ? ds.snapshot_count : 0;
-                        const checked = selectedDatasetIdsForSave.has(id);
-                        return (
-                          <label
-                            key={id}
-                            className={clsx(
-                              "flex items-center gap-3 px-3 py-2 rounded-lg border text-xs cursor-pointer transition-colors",
-                              checked
-                                ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-100"
-                                : "border-white/10 bg-white/[0.02] text-slate-200 hover:border-white/20 hover:bg-white/5"
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              className="w-3.5 h-3.5 rounded border border-white/30 bg-black/40"
-                              checked={checked}
-                              onChange={() =>
-                                setSelectedDatasetIdsForSave(prev => {
-                                  const next = new Set(prev);
-                                  if (next.has(id)) next.delete(id);
-                                  else next.add(id);
-                                  return next;
-                                })
-                              }
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="truncate">{label}</div>
-                              <div className="text-[10px] text-slate-400">
-                                {count} log{count !== 1 ? "s" : ""}
-                              </div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-white/10 pt-3">
-                  <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-slate-400 mb-2">
-                    Create new dataset
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newDatasetName}
-                      onChange={e => setNewDatasetName(e.target.value)}
-                      placeholder="Dataset name (optional)"
-                      maxLength={200}
-                      className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-fuchsia-500/60"
-                    />
-                  </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    If you enter a name, a new dataset will be created and these logs will be
-                    included.
-                  </p>
-                </div>
-              </div>
-
-              <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between bg-black/40">
-                <button
-                  type="button"
-                  onClick={closeSaveModal}
-                  disabled={isSavingToDatasets}
-                  className="px-4 py-1.5 rounded-lg border border-white/15 text-xs font-semibold text-slate-200 hover:bg-white/5 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={saveSelectionToDatasets}
-                  disabled={isSavingToDatasets}
-                  className="px-4 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/60 text-xs font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isSavingToDatasets && (
-                    <span className="inline-block w-3 h-3 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin" />
-                  )}
-                  {isSavingToDatasets ? "Saving…" : "Save to datasets"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <LiveSaveToDatasetsModal
+        isOpen={isSaveModalOpen}
+        isSaving={isSavingToDatasets}
+        snapshotIdsCount={snapshotIdsToSave.length}
+        datasets={datasetsForSave}
+        selectedDatasetIds={selectedDatasetIdsForSave}
+        newDatasetName={newDatasetName}
+        onClose={closeSaveModal}
+        onToggleDataset={id =>
+          setSelectedDatasetIdsForSave(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          })
+        }
+        onDatasetNameChange={setNewDatasetName}
+        onSubmit={saveSelectionToDatasets}
+      />
       {/* Expanded Data Block Modal */}
       <AnimatePresence>
-        {expandedId &&
+        {detailModalId &&
           (() => {
-            const s = snapshots.find(snap => String(snap.id) === String(expandedId));
+            const s = snapshots.find(snap => String(snap.id) === String(detailModalId));
             if (!s) return null;
-            const cacheKey = projectId && expandedId ? `${projectId}-${expandedId}` : "";
+            const cacheKey = projectId && detailModalId ? `${projectId}-${detailModalId}` : "";
             const fullSnap =
               detailFetchedSnapshot ??
               (cacheKey ? snapshotDetailCacheRef.current.get(cacheKey) : undefined);
@@ -1534,7 +1172,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
             return (
               <SnapshotDetailModal
                 snapshot={snapshotToShow}
-                onClose={() => setExpandedId(null)}
+                onClose={() => setDetailModalId(null)}
                 policyState={policyStateForModal}
                 evalRows={evalRowsForModal}
                 savedEvalConfig={savedEvalConfig}
@@ -1553,3 +1191,4 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
 };
 
 export default ClinicalLog;
+

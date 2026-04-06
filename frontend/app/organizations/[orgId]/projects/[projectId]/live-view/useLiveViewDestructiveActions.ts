@@ -13,7 +13,7 @@ export function useLiveViewDestructiveActions(options: {
   projectId: number;
   selectedAgentId: string | null;
   setSelectedAgentId: (agentId: string | null) => void;
-  setPanelTab: (tab: "logs" | "eval" | "data" | "settings") => void;
+  setPanelTab: (tab: "issues" | "saved" | "checks" | "settings") => void;
   mutateAgents: (data?: unknown, shouldRevalidate?: boolean) => Promise<unknown>;
   resetHistory: () => void;
   toast: ToastApi;
@@ -44,7 +44,7 @@ export function useLiveViewDestructiveActions(options: {
         const result = await liveViewAPI.hardDeleteAgents(projectId, agentIds);
         if (selectedAgentId && agentIds.includes(selectedAgentId)) {
           setSelectedAgentId(null);
-          setPanelTab("logs");
+          setPanelTab("issues");
         }
         await mutateAgents(undefined, true);
         resetHistory();
@@ -88,7 +88,7 @@ export function useLiveViewDestructiveActions(options: {
         await liveViewAPI.restoreAgent(projectId, agentId);
         await mutateAgents(undefined, true);
         setSelectedAgentId(agentId);
-        setPanelTab("logs");
+        setPanelTab("issues");
         toast.showToast("Node restored to Live View.", "success");
       } catch (error: unknown) {
         const permissionToast = getProjectPermissionToast({

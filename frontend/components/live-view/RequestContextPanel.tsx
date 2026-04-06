@@ -11,45 +11,37 @@ import {
   getRequestObject,
 } from "@/lib/requestOverview";
 
-/** Snapshot shape used by SnapshotDetailModal (subset). */
 export type RequestContextSnapshot = {
   system_prompt?: string | null;
   user_message?: string | null;
   request_prompt?: string | null;
   payload?: Record<string, unknown> | null;
-  /** From GET snapshot when backend derived hints from stored payload (preferred). */
   request_context_meta?: RequestContextMeta | null;
 };
 
 const RAG_KEYS = ["context", "retrieved_chunks", "documents", "attachments", "rag_context", "sources"] as const;
-
 const MAX_PREVIEW_CHARS = 8000;
 
-function safeStringify(val: unknown): string {
-  if (val === null || val === undefined) return "";
-  if (typeof val === "string") return val;
+function safeStringify(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
   try {
-    return JSON.stringify(val, null, 2);
+    return JSON.stringify(value, null, 2);
   } catch {
-    return String(val);
+    return String(value);
   }
 }
 
-function CollapsiblePre({
-  text,
-  className,
-}: {
-  text: string;
-  className?: string;
-}) {
+function CollapsiblePre({ text, className }: { text: string; className?: string }) {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > MAX_PREVIEW_CHARS;
   const shown = expanded || !long ? text : `${text.slice(0, MAX_PREVIEW_CHARS)}\n\n… (${text.length} chars total)`;
+
   return (
     <div className="space-y-2">
       <pre
         className={clsx(
-          "text-sm font-mono leading-relaxed whitespace-pre-wrap break-all selection:bg-emerald-500/30 overflow-x-auto",
+          "overflow-x-auto whitespace-pre-wrap break-all text-sm font-mono leading-relaxed selection:bg-emerald-500/30",
           className
         )}
       >
@@ -58,8 +50,8 @@ function CollapsiblePre({
       {long ? (
         <button
           type="button"
-          onClick={() => setExpanded(e => !e)}
-          className="text-xs font-medium text-sky-400/90 hover:text-sky-300"
+          onClick={() => setExpanded(current => !current)}
+          className="text-xs font-medium text-sky-400/90 hover:text-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
         >
           {expanded ? "Show less" : "Show full text"}
         </button>
@@ -69,83 +61,77 @@ function CollapsiblePre({
 }
 
 function roleLabel(role: string): string {
-  const r = role.toLowerCase();
-  if (r === "system") return "System";
-  if (r === "user") return "User";
-  if (r === "assistant") return "Assistant";
-  if (r === "tool") return "Tool";
+  const normalized = role.toLowerCase();
+  if (normalized === "system") return "System";
+  if (normalized === "user") return "User";
+  if (normalized === "assistant") return "Assistant";
+  if (normalized === "tool") return "Tool";
   return role;
 }
 
-function messageContentPreview(m: Record<string, unknown>): string {
-  const c = m.content;
-  if (typeof c === "string") return c;
-  if (c != null && typeof c === "object") {
-    return safeStringify(c);
-  }
+function messageContentPreview(message: Record<string, unknown>): string {
+  const content = message.content;
+  if (typeof content === "string") return content;
+  if (content != null && typeof content === "object") return safeStringify(content);
   return "";
 }
 
-/**
- * Unified request context: `payload.request.messages` (OpenAI-style) when present,
- * else legacy `system_prompt` / `user_message` columns; plus heuristic RAG/attachment blocks.
- * See docs/live-view-ingest-field-matrix.md
- */
 export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnapshot }) {
   const meta = snapshot.request_context_meta;
-  const payload = useMemo(
-    () => ((snapshot.payload || {}) as Record<string, unknown>),
-    [snapshot.payload]
-  );
-  const req = useMemo(() => getRequestObject(payload) ?? undefined, [payload]);
+  const payload = useMemo(() => ((snapshot.payload || {}) as Record<string, unknown>), [snapshot.payload]);
+  const requestObject = useMemo(() => getRequestObject(payload) ?? undefined, [payload]);
+
   const messages = useMemo(() => {
-    const raw = req?.messages;
-    if (Array.isArray(raw)) return raw.filter(m => m && typeof m === "object") as Record<string, unknown>[];
+    const raw = requestObject?.messages;
+    if (Array.isArray(raw)) {
+      return raw.filter(item => item && typeof item === "object") as Record<string, unknown>[];
+    }
     return null;
-  }, [req?.messages]);
+  }, [requestObject?.messages]);
 
   const extendedBlocks = useMemo(() => {
-    const blocks: { key: string; label: string; value: unknown }[] = [];
-    const scan = (obj: Record<string, unknown> | undefined, prefix: string) => {
-      if (!obj) return;
-      for (const k of RAG_KEYS) {
-        if (k in obj && obj[k] != null && obj[k] !== "") {
-          blocks.push({
-            key: `${prefix}${k}`,
-            label: k,
-            value: obj[k],
-          });
+    const blocks: Array<{ key: string; label: string; value: unknown }> = [];
+    const scan = (object: Record<string, unknown> | undefined, prefix: string) => {
+      if (!object) return;
+      for (const key of RAG_KEYS) {
+        if (key in object && object[key] != null && object[key] !== "") {
+          blocks.push({ key: `${prefix}${key}`, label: key, value: object[key] });
         }
       }
     };
-    const innerReq = getRequestObject(payload) ?? undefined;
+
     scan(payload, "payload.");
-    scan(innerReq, "request.");
+    scan(getRequestObject(payload) ?? undefined, "request.");
     return blocks;
   }, [payload]);
-  const requestControls = useMemo(() => collectRequestControlEntries(req ?? null), [req]);
-  const additionalRequestFields = useMemo(() => collectAdditionalRequestEntries(req ?? null), [req]);
+
+  const requestControls = useMemo(() => collectRequestControlEntries(requestObject ?? null), [requestObject]);
+  const additionalRequestFields = useMemo(
+    () => collectAdditionalRequestEntries(requestObject ?? null),
+    [requestObject]
+  );
 
   const omittedFromPayload =
-    Boolean(req?.["_pluvianai_message_bodies_omitted"]) || Boolean(payload?.["_pluvianai_message_bodies_omitted"]);
+    Boolean(requestObject?.["_pluvianai_message_bodies_omitted"]) ||
+    Boolean(payload?.["_pluvianai_message_bodies_omitted"]);
   const truncatedFromPayload =
-    Boolean(req?.["_pluvianai_truncated"]) || Boolean(payload?.["_pluvianai_truncated"]);
-  const omittedRequest =
-    meta?.omitted_by_policy === true || (meta == null && omittedFromPayload);
+    Boolean(requestObject?.["_pluvianai_truncated"]) || Boolean(payload?.["_pluvianai_truncated"]);
+  const omittedRequest = meta?.omitted_by_policy === true || (meta == null && omittedFromPayload);
   const truncatedRequest = meta?.truncated === true || (meta == null && truncatedFromPayload);
   const requestTextOmitted =
     meta?.request_text_omitted === true ||
-    (meta?.request_text_omitted == null && Boolean(req?.["_pluvianai_message_bodies_omitted"]));
+    (meta?.request_text_omitted == null && Boolean(requestObject?.["_pluvianai_message_bodies_omitted"]));
   const responseTextOmitted =
     meta?.response_text_omitted === true ||
     (meta?.response_text_omitted == null &&
       Boolean((payload.response as Record<string, unknown> | undefined)?.["_pluvianai_response_bodies_omitted"]));
   const requestTruncated =
     meta?.request_truncated === true ||
-    (meta?.request_truncated == null && Boolean(req?.["_pluvianai_truncated"]));
+    (meta?.request_truncated == null && Boolean(requestObject?.["_pluvianai_truncated"]));
   const payloadTruncated =
     meta?.payload_truncated === true ||
     (meta?.payload_truncated == null && Boolean(payload?.["_pluvianai_truncated"]));
+
   const captureWarnings = [
     truncatedRequest
       ? requestTruncated && payloadTruncated
@@ -179,19 +165,18 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
   ) => {
     if (fields.length === 0) return null;
     const Icon = icon;
+
     return (
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-white/5 pb-3">
           <Icon className={clsx("h-5 w-5", accentClassName)} />
-          <span className="text-sm font-bold uppercase tracking-widest text-slate-200">{title}</span>
+          <span className="text-sm font-semibold text-slate-200">{title}</span>
         </div>
         {description ? <p className="text-xs text-slate-500">{description}</p> : null}
         <div className="space-y-4">
           {fields.map(field => (
             <div key={field.key} className="rounded-xl border border-white/5 bg-[#0a0a0c] p-4">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-cyan-300/90">
-                {field.key}
-              </div>
+              <div className="mb-2 text-xs font-medium text-cyan-300/90">{field.key}</div>
               <CollapsiblePre text={safeStringify(field.value) || "—"} className="text-slate-300" />
             </div>
           ))}
@@ -212,25 +197,24 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
             </div>
           </div>
         ) : null}
+
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-3 border-b border-white/5 pb-3">
             <Layers className="h-5 w-5 text-sky-400" />
-            <span className="text-sm font-bold uppercase tracking-widest text-slate-200">Request messages</span>
+            <span className="text-sm font-semibold text-slate-200">Request messages</span>
           </div>
           <div className="space-y-4">
-            {messages.map((m, idx) => {
-              const role = String(m.role ?? "unknown");
-              const prev = messageContentPreview(m);
+            {messages.map((message, idx) => {
+              const role = String(message.role ?? "unknown");
+              const preview = messageContentPreview(message);
               return (
                 <div
                   key={idx}
                   className="rounded-xl border border-white/5 bg-[#0a0a0c] p-4"
                   aria-label={`Message ${idx + 1} ${role}`}
                 >
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-sky-400/90">
-                    {roleLabel(role)}
-                  </div>
-                  <CollapsiblePre text={prev || "—"} className="text-slate-300" />
+                  <div className="mb-2 text-xs font-medium text-sky-400/90">{roleLabel(role)}</div>
+                  <CollapsiblePre text={preview || "—"} className="text-slate-300" />
                 </div>
               );
             })}
@@ -241,15 +225,15 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 border-b border-white/5 pb-3">
               <BookOpen className="h-5 w-5 text-violet-400" />
-              <span className="text-sm font-bold uppercase tracking-widest text-slate-200">Extended context</span>
+              <span className="text-sm font-semibold text-slate-200">Extended context</span>
             </div>
             <p className="text-xs text-slate-500">
-              RAG / attachments / custom keys detected in payload (heuristic). Schema may vary by app.
+              RAG, attachments, and custom keys detected in the payload. Schema can vary by app.
             </p>
-            {extendedBlocks.map(b => (
-              <div key={b.key} className="rounded-xl border border-violet-500/10 bg-[#0a0a0c] p-4">
-                <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-violet-300/90">{b.label}</div>
-                <CollapsiblePre text={safeStringify(b.value)} className="text-slate-400" />
+            {extendedBlocks.map(block => (
+              <div key={block.key} className="rounded-xl border border-violet-500/10 bg-[#0a0a0c] p-4">
+                <div className="mb-2 text-xs font-medium text-violet-300/90">{block.label}</div>
+                <CollapsiblePre text={safeStringify(block.value)} className="text-slate-400" />
               </div>
             ))}
           </div>
@@ -274,7 +258,6 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
     );
   }
 
-  /* Legacy: columnar system + user only */
   return (
     <div className="space-y-8">
       {captureWarnings.length > 0 ? (
@@ -286,12 +269,13 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
           </div>
         </div>
       ) : null}
+
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-white/5 pb-3">
           <AlignLeft className="h-5 w-5 text-slate-400" />
-          <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">System Prompt</span>
+          <span className="text-sm font-semibold text-slate-200">System prompt</span>
         </div>
-        <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 text-sm text-slate-400 font-mono leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30 overflow-x-auto shadow-inner">
+        <div className="overflow-x-auto rounded-[20px] border border-white/5 bg-[#030806] p-6 font-mono text-sm leading-relaxed text-slate-400 shadow-inner selection:bg-emerald-500/30">
           {safeStringify(snapshot.system_prompt) || "—"}
         </div>
       </div>
@@ -299,9 +283,9 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-white/5 pb-3">
           <AlignLeft className="h-5 w-5 text-slate-400" />
-          <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">User Input</span>
+          <span className="text-sm font-semibold text-slate-200">User input</span>
         </div>
-        <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 text-sm text-slate-300 font-mono leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30 overflow-x-auto shadow-inner">
+        <div className="overflow-x-auto rounded-[20px] border border-white/5 bg-[#030806] p-6 font-mono text-sm leading-relaxed text-slate-300 shadow-inner selection:bg-emerald-500/30">
           {safeStringify(snapshot.request_prompt ?? snapshot.user_message) || "—"}
         </div>
       </div>
@@ -310,12 +294,12 @@ export function RequestContextPanel({ snapshot }: { snapshot: RequestContextSnap
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-3 border-b border-white/5 pb-3">
             <FileText className="h-5 w-5 text-violet-400" />
-            <span className="text-sm font-bold uppercase tracking-widest text-slate-200">Extended context</span>
+            <span className="text-sm font-semibold text-slate-200">Extended context</span>
           </div>
-          {extendedBlocks.map(b => (
-            <div key={b.key} className="rounded-xl border border-violet-500/10 bg-[#0a0a0c] p-4">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-violet-300/90">{b.label}</div>
-              <CollapsiblePre text={safeStringify(b.value)} className="text-slate-400" />
+          {extendedBlocks.map(block => (
+            <div key={block.key} className="rounded-xl border border-violet-500/10 bg-[#0a0a0c] p-4">
+              <div className="mb-2 text-xs font-medium text-violet-300/90">{block.label}</div>
+              <CollapsiblePre text={safeStringify(block.value)} className="text-slate-400" />
             </div>
           ))}
         </div>
