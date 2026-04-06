@@ -59,11 +59,15 @@ export function LiveIssuesToolbar({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-white/[0.04] bg-[#18191e] p-5">
-      <div className="flex items-center">
+      <div className="flex items-center gap-2">
         <span className="rounded-md px-2 py-0.5 font-mono text-[13px] tracking-wide text-slate-400">
-          Showing {visibleCount} of {totalCount} issues
-          {totalCount > recentTraceLimit ? ` · capped at ${recentTraceLimit}` : ""}
+          {visibleCount} of {totalCount} issues shown
         </span>
+        {totalCount > recentTraceLimit ? (
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium text-slate-400">
+            Limit {recentTraceLimit}
+          </span>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-3">

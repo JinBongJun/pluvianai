@@ -48,6 +48,9 @@ export function LiveIssueDetailDrawer({
 }) {
   const failedCount = evalRows.filter(row => row.status === "fail").length;
   const passedCount = evalRows.filter(row => row.status === "pass").length;
+  const failedRows = evalRows.filter(row => row.status === "fail");
+  const visibleRows = failedRows.length > 0 ? failedRows : evalRows.slice(0, 3);
+  const hiddenChecksCount = Math.max(evalRows.length - visibleRows.length, 0);
   const surfaceStatus: SurfaceStatus = buildSurfaceStatus({
     failedCount,
     passedCount,
@@ -61,7 +64,7 @@ export function LiveIssueDetailDrawer({
       role="dialog"
       aria-modal="false"
       aria-labelledby="live-issue-drawer-title"
-      className="flex h-full w-[min(560px,calc(100%-3rem))] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#0f1014]/98 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+      className="flex h-full w-[min(500px,calc(100%-4rem))] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#0f1014]/98 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
     >
       <div className="flex items-start justify-between gap-4 border-b border-white/8 px-5 py-4">
         <div className="min-w-0">
@@ -84,7 +87,7 @@ export function LiveIssueDetailDrawer({
       <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 custom-scrollbar">
         <section className="space-y-2">
           <h3 className="text-xs font-medium text-slate-500">Case</h3>
-          <div className="rounded-2xl border border-white/6 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-200">
+          <div className="truncate rounded-2xl border border-white/6 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-slate-200">
             {snapshot.request_prompt || snapshot.user_message || "No request text captured."}
           </div>
         </section>
@@ -112,10 +115,19 @@ export function LiveIssueDetailDrawer({
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-xs font-medium text-slate-500">Checks</h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xs font-medium text-slate-500">
+              {failedRows.length > 0 ? "Checks to review" : "Checks"}
+            </h3>
+            {hiddenChecksCount > 0 ? (
+              <span className="text-xs text-slate-500">
+                {hiddenChecksCount} more {hiddenChecksCount === 1 ? "check" : "checks"} in full details
+              </span>
+            ) : null}
+          </div>
           <div className="space-y-2">
             {evalRows.length > 0 ? (
-              evalRows.map(row => (
+              visibleRows.map(row => (
                 <div
                   key={`${snapshot.id}-${row.id}`}
                   className="flex items-center justify-between rounded-xl border border-white/6 bg-white/[0.03] px-3 py-2 text-sm"
@@ -154,7 +166,7 @@ export function LiveIssueDetailDrawer({
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-white/8 px-5 py-4">
-        <p className="text-sm text-slate-500">Use Release Gate when this case needs a controlled rerun.</p>
+        <p className="text-sm text-slate-500">Review is a quick triage view. Open full details for raw request and payload data.</p>
         <div className="flex items-center gap-2">
           {releaseGateHref ? (
             <Link

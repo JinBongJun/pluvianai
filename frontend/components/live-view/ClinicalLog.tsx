@@ -1,6 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Terminal } from "lucide-react";
+import clsx from "clsx";
 import { behaviorAPI, liveViewAPI } from "@/lib/api";
 import type { LiveViewRequestOverview, RequestContextMeta } from "@/lib/api/live-view";
 import { getRateLimitInfo, isRateLimitError } from "@/lib/api/client";
@@ -957,7 +958,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
 
       {/* Scrollable Data Grid */}
       <div
-        className="relative h-0 flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-6 lg:p-8"
+        className={clsx(
+          "relative h-0 flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-6 lg:p-8",
+          expandedSnapshot ? "xl:pr-[34rem]" : null
+        )}
         onWheelCapture={event => {
           event.stopPropagation();
         }}
@@ -1081,7 +1085,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 24, opacity: 0 }}
               transition={{ duration: 0.18 }}
-              className="absolute inset-y-6 right-6 z-30"
+              className="absolute inset-y-8 right-8 z-30"
             >
               <LiveIssueDetailDrawer
                 snapshot={expandedSnapshot}
