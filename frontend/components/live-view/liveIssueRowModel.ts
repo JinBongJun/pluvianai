@@ -10,7 +10,6 @@ export function buildLiveIssueRowModel(args: {
   failedCount: number;
   passedCount: number;
   evalRowsCount: number;
-  actionHref: string | null;
 }) {
   const {
     requestText,
@@ -22,7 +21,6 @@ export function buildLiveIssueRowModel(args: {
     failedCount,
     passedCount,
     evalRowsCount,
-    actionHref,
   } = args;
 
   return {
@@ -42,6 +40,6 @@ export function buildLiveIssueRowModel(args: {
       hasToolDefinitions,
       hasToolResults,
     }),
-    actionLabel: actionHref ? "Open in Gate" : "Review",
+    actionLabel: "Details",
   };
 }

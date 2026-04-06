@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import clsx from "clsx";
-import { CheckSquare, ChevronDown, Square } from "lucide-react";
+import { CheckSquare, Square } from "lucide-react";
 
 import type { SurfaceStatus } from "@/components/live-view/liveIssuePresentation";
 
@@ -158,12 +158,9 @@ export function LiveIssueRow({
                 event.stopPropagation();
                 onToggleRow();
               }}
-              className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
+              className="inline-flex items-center rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
             >
               {actionLabel}
-              <ChevronDown
-                className={clsx("h-3.5 w-3.5 transition-transform duration-300", isExpanded && "rotate-180")}
-              />
             </button>
           )}
         </div>

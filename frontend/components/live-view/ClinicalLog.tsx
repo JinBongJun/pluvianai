@@ -14,7 +14,6 @@ import { parsePlanLimitError, type PlanLimitError } from "@/lib/planErrors";
 import { logger } from "@/lib/logger";
 import { getEnabledCheckIdsFromConfig, getEvalCheckLabel } from "@/lib/evalPresentation";
 import { getProjectPermissionToast } from "@/lib/projectAccess";
-import { LiveIssueDetailDrawer } from "@/components/live-view/LiveIssueDetailDrawer";
 import { LiveIssueRow } from "@/components/live-view/LiveIssueRow";
 import { LiveIssuesToolbar } from "@/components/live-view/LiveIssuesToolbar";
 import { LiveSaveToDatasetsModal } from "@/components/live-view/LiveSaveToDatasetsModal";
@@ -315,7 +314,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   onLogsMutated,
 }) => {
   const toast = useToast();
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [detailModalId, setDetailModalId] = React.useState<string | null>(null);
   const [recentTraceLimit, setRecentTraceLimit] = React.useState<number>(DEFAULT_LAST_N_RUNS);
   const [riskFilter, setRiskFilter] = React.useState<RiskFilter>("all");
@@ -453,7 +451,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
 
   React.useEffect(() => {
     // Collapse expanded card when filters/window change to avoid stale selection confusion.
-    setExpandedId(null);
+    setDetailModalId(null);
   }, [riskFilter, recentTraceLimit, agentId]);
 
   const totalSnapshotsCount = React.useMemo(
@@ -461,7 +459,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     [data?.total_count, data?.count, snapshots.length]
   );
 
-  const activeDetailSnapshotId = detailModalId ?? expandedId;
+  const activeDetailSnapshotId = detailModalId;
   // List uses light mode (no payload/long text); issue drawer / detail modal need full snapshot. Cache by (projectId, snapshotId).
   const snapshotDetailCacheRef = React.useRef<Map<string, ClinicalSnapshot>>(new Map());
   const [detailFetchedSnapshot, setDetailFetchedSnapshot] = React.useState<ClinicalSnapshot | null>(
@@ -583,10 +581,10 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   }, [filteredSnapshots, sortMode]);
 
   React.useEffect(() => {
-    if (expandedId && !visibleSnapshots.some(s => String(s.id) === String(expandedId))) {
-      setExpandedId(null);
+    if (detailModalId && !visibleSnapshots.some(s => String(s.id) === String(detailModalId))) {
+      setDetailModalId(null);
     }
-  }, [expandedId, visibleSnapshots]);
+  }, [detailModalId, visibleSnapshots]);
 
   const configuredPolicies = React.useMemo(() => {
     const projectRules = Array.isArray(projectRulesData) ? projectRulesData : [];
@@ -686,8 +684,8 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
       );
       setSelectedRemoveIds(new Set());
       setIsRemoveMode(false);
-      if (expandedId && targetIds.includes(Number(expandedId))) {
-        setExpandedId(null);
+      if (detailModalId && targetIds.includes(Number(detailModalId))) {
+        setDetailModalId(null);
       }
       await mutate();
       await Promise.resolve(onLogsMutated?.()).catch(() => undefined);
@@ -849,16 +847,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     }
   };
 
-  const expandedSnapshot = React.useMemo(() => {
-    if (!expandedId) return null;
-    const fromList = snapshots.find(snap => String(snap.id) === String(expandedId));
-    if (!fromList) return null;
-    if (detailFetchedSnapshot && String(detailFetchedSnapshot.id) === String(expandedId)) {
-      return detailFetchedSnapshot;
-    }
-    return fromList;
-  }, [detailFetchedSnapshot, expandedId, snapshots]);
-
   if (isLoading) {
     return (
       <div
@@ -958,10 +946,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
 
       {/* Scrollable Data Grid */}
       <div
-        className={clsx(
-          "relative h-0 flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-6 lg:p-8",
-          expandedSnapshot ? "xl:pr-[34rem]" : null
-        )}
+        className="relative h-0 flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-6 lg:p-8"
         onWheelCapture={event => {
           event.stopPropagation();
         }}
@@ -1006,7 +991,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
           ) : (
             <div className="flex flex-col">
               {visibleSnapshots.map(s => {
-                const isExpanded = expandedId === s.id;
                 const fullTime = formatPrettyTime(s.created_at);
                 const toolNames = extractToolNames(s);
                 const toolDefinitionCount = getToolDefinitionCount(s, toolNames);
@@ -1023,9 +1007,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
                 const passedCount = evalRows.filter(r => r.status === "pass").length;
                 const firstFailedEvalId = evalRows.find(r => r.status === "fail")?.id;
                 const actionHref =
-                  orgId && toolDefinitionCount > 0
-                    ? `/organizations/${orgId}/projects/${projectId}/release-gate`
-                    : null;
+                  null;
                 const { issueTitle, casePreview, modelLabel, surfaceStatus, actionLabel } =
                   buildLiveIssueRowModel({
                     requestText: s.request_prompt || s.user_message,
@@ -1039,14 +1021,13 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
                     failedCount,
                     passedCount,
                     evalRowsCount: evalRows.length,
-                    actionHref,
                   });
 
                 return (
                   <LiveIssueRow
                     key={s.id}
                     id={s.id}
-                    isExpanded={isExpanded}
+                    isExpanded={false}
                     isSelectMode={isSelectMode}
                     isRemoveMode={isRemoveMode}
                     isSelected={selectedIds.has(String(s.id))}
@@ -1069,7 +1050,7 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
                       } else if (isRemoveMode) {
                         toggleRemoveSelect(String(s.id));
                       } else {
-                        setExpandedId(isExpanded ? null : s.id);
+                        setDetailModalId(String(s.id));
                       }
                     }}
                   />
@@ -1078,61 +1059,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
             </div>
           )}
         </div>
-        <AnimatePresence>
-          {expandedSnapshot && (
-            <motion.aside
-              initial={{ x: 24, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 24, opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="absolute inset-y-8 right-8 z-30"
-            >
-              <LiveIssueDetailDrawer
-                snapshot={expandedSnapshot}
-                detailSnapshot={detailFetchedSnapshot as Record<string, unknown> | null}
-                issueTitle={
-                  buildLiveIssueRowModel({
-                    requestText: expandedSnapshot.request_prompt || expandedSnapshot.user_message,
-                    model: expandedSnapshot.model,
-                    failedEvalId: toEvalRows(expandedSnapshot as unknown as Record<string, unknown>).find(
-                      row => row.status === "fail"
-                    )?.id,
-                    failedEvalLabel: getEvalCheckLabel(
-                      toEvalRows(expandedSnapshot as unknown as Record<string, unknown>).find(
-                        row => row.status === "fail"
-                      )?.id || "",
-                      "Check failed"
-                    ),
-                    hasToolDefinitions:
-                      getToolDefinitionCount(expandedSnapshot, extractToolNames(expandedSnapshot)) > 0,
-                    hasToolResults: Boolean(expandedSnapshot.has_tool_results),
-                    failedCount: getSnapshotFailedCount(expandedSnapshot),
-                    passedCount: toEvalRows(expandedSnapshot as unknown as Record<string, unknown>).filter(
-                      row => row.status === "pass"
-                    ).length,
-                    evalRowsCount: toEvalRows(expandedSnapshot as unknown as Record<string, unknown>).length,
-                    actionHref: orgId
-                      ? `/organizations/${orgId}/projects/${projectId}/release-gate`
-                      : null,
-                  }).issueTitle
-                }
-                toolDefinitionCount={getToolDefinitionCount(
-                  expandedSnapshot,
-                  extractToolNames(expandedSnapshot)
-                )}
-                evalRows={toEvalRows(expandedSnapshot as unknown as Record<string, unknown>)}
-                releaseGateHref={
-                  orgId
-                    ? `/organizations/${orgId}/projects/${projectId}/release-gate`
-                    : undefined
-                }
-                formatPrettyTime={formatPrettyTime}
-                onClose={() => setExpandedId(null)}
-                onOpenFullDetails={() => setDetailModalId(expandedId)}
-              />
-            </motion.aside>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   );
