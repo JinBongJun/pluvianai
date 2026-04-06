@@ -848,6 +848,16 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
     }
   };
 
+  const expandedSnapshot = React.useMemo(() => {
+    if (!expandedId) return null;
+    const fromList = snapshots.find(snap => String(snap.id) === String(expandedId));
+    if (!fromList) return null;
+    if (detailFetchedSnapshot && String(detailFetchedSnapshot.id) === String(expandedId)) {
+      return detailFetchedSnapshot;
+    }
+    return fromList;
+  }, [detailFetchedSnapshot, expandedId, snapshots]);
+
   if (isLoading) {
     return (
       <div
@@ -886,15 +896,6 @@ export const ClinicalLog: React.FC<ClinicalLogProps> = ({
   }
 
   const isEmptyResult = visibleSnapshots.length === 0;
-  const expandedSnapshot = React.useMemo(() => {
-    if (!expandedId) return null;
-    const fromList = snapshots.find(snap => String(snap.id) === String(expandedId));
-    if (!fromList) return null;
-    if (detailFetchedSnapshot && String(detailFetchedSnapshot.id) === String(expandedId)) {
-      return detailFetchedSnapshot;
-    }
-    return fromList;
-  }, [detailFetchedSnapshot, expandedId, snapshots]);
 
   const mainContent = (
     <div className="relative flex h-0 flex-1 min-h-0 flex-col overflow-hidden bg-[#111216]">
