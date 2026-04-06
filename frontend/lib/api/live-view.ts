@@ -30,6 +30,7 @@ export type LiveViewRequestOverview = {
 /** `GET .../snapshots` list item — light list can include `has_tool_results` without loading full timeline. */
 export type LiveViewSnapshotListItem = {
   id: number;
+  input_preview?: string | null;
   has_tool_calls?: boolean;
   has_tool_results?: boolean;
   tool_calls_summary?: unknown[];
@@ -56,6 +57,7 @@ export type LiveViewToolTimelineRow = {
 
 /** Snapshot detail includes redacted tool_timeline + version for §14.2. */
 export type LiveViewSnapshotDetail = {
+  input_preview?: string | null;
   tool_timeline?: LiveViewToolTimelineRow[];
   tool_timeline_redaction_version?: number;
   /** Set from stored payload markers when SDK omitted/truncated bodies (see docs/live-view-context-privacy-plan.md). */

@@ -221,6 +221,95 @@ def _maybe_number(value: Any) -> Optional[float]:
     return None
 
 
+def _normalize_preview_text(value: Any, max_length: int = 160) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    normalized = " ".join(value.split()).strip()
+    if not normalized:
+        return None
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[: max(0, max_length - 3)].rstrip() + "..."
+
+
+def _message_content_preview(content: Any) -> Optional[str]:
+    if isinstance(content, str):
+        return _normalize_preview_text(content)
+    if not isinstance(content, list):
+        return None
+
+    parts: List[str] = []
+    for item in content:
+        if isinstance(item, str):
+            normalized = _normalize_preview_text(item)
+            if normalized:
+                parts.append(normalized)
+            continue
+        if not isinstance(item, dict):
+            continue
+        for key in ("text", "content", "input_text", "output_text", "value"):
+            value = item.get(key)
+            if isinstance(value, str):
+                normalized = _normalize_preview_text(value)
+                if normalized:
+                    parts.append(normalized)
+                    break
+            elif isinstance(value, dict):
+                nested = value.get("value") or value.get("text")
+                normalized = _normalize_preview_text(nested)
+                if normalized:
+                    parts.append(normalized)
+                    break
+    if not parts:
+        return None
+    return _normalize_preview_text(" ".join(parts))
+
+
+def _request_input_preview(
+    payload: Any,
+    request_prompt: Optional[str] = None,
+    user_message: Optional[str] = None,
+) -> Optional[str]:
+    for candidate in (request_prompt, user_message):
+        normalized = _normalize_preview_text(candidate)
+        if normalized:
+            return normalized
+
+    request = _get_request_object(payload) or {}
+
+    for key in ("user_message", "message", "prompt", "input"):
+        normalized = _normalize_preview_text(request.get(key))
+        if normalized:
+            return normalized
+
+    messages = request.get("messages")
+    if isinstance(messages, list):
+        for message in reversed(messages):
+            if not isinstance(message, dict):
+                continue
+            role = str(message.get("role") or "").strip().lower()
+            if role and role != "user":
+                continue
+            preview = _message_content_preview(message.get("content"))
+            if preview:
+                return preview
+        for message in reversed(messages):
+            if not isinstance(message, dict):
+                continue
+            preview = _message_content_preview(message.get("content"))
+            if preview:
+                return preview
+
+    inputs = request.get("inputs")
+    if isinstance(inputs, list):
+        for item in inputs:
+            preview = _message_content_preview(item)
+            if preview:
+                return preview
+
+    return None
+
+
 def _request_overview_from_payload(
     payload: Any,
     provider: Optional[str] = None,
@@ -1706,6 +1795,11 @@ def list_snapshots(
             "created_at": s.created_at,
             **_tool_fields(s, skip_payload=light),
             "has_tool_results": has_tool_results,
+            "input_preview": _request_input_preview(
+                getattr(s, "payload", None),
+                request_prompt=getattr(s, "user_message", None),
+                user_message=getattr(s, "user_message", None),
+            ),
             # Derived from DB payload even when light=true (payload omitted from JSON for bandwidth).
             "request_context_meta": request_context_meta,
             "request_overview": _request_overview_from_payload(
@@ -1796,6 +1890,11 @@ def get_snapshot(
         "tool_timeline": tool_timeline,
         "tool_timeline_redaction_version": TOOL_TIMELINE_REDACTION_VERSION,
         "request_context_meta": request_context_meta,
+        "input_preview": _request_input_preview(
+            snap.payload,
+            request_prompt=snap.user_message,
+            user_message=snap.user_message,
+        ),
         "request_overview": _request_overview_from_payload(
             snap.payload,
             provider=getattr(snap, "provider", None),
