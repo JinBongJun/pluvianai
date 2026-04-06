@@ -235,7 +235,7 @@ export default function ProfileSettingsPage() {
       setNewPassword("");
       setConfirmNewPassword("");
       setNoticeTone("success");
-      setNotice("Password changed successfully.");
+      setNotice("Password changed. Existing signed-in sessions stay active until they sign out.");
     } catch (err) {
       logger.error("Failed to change password", err);
       setNoticeTone("error");
@@ -505,6 +505,12 @@ export default function ProfileSettingsPage() {
               ? "Update your account password. For security, use at least 12 characters."
               : "Password sign-in is not enabled for this account yet."}
           </p>
+          {canChangePassword ? (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              Changing your password does not automatically sign out other devices. Existing signed-in
+              sessions stay active until they sign out.
+            </div>
+          ) : null}
           {canChangePassword ? <div className="grid md:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm text-slate-400 mb-1">Current password</label>
