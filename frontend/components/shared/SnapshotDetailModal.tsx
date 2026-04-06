@@ -1,15 +1,12 @@
-"use client";
+﻿"use client";
 
 import React from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Activity,
   AlignLeft,
   AlertCircle,
   CheckCircle2,
-  CircleDollarSign,
-  Coins,
   Scale,
   Send,
   ShieldCheck,
@@ -29,8 +26,8 @@ import type {
 } from "@/lib/api/live-view";
 import { ToolTimelinePanel } from "@/components/tool-timeline/ToolTimelinePanel";
 import { RequestContextPanel } from "@/components/live-view/RequestContextPanel";
+import { SnapshotRiskHero } from "@/components/shared/SnapshotRiskHero";
 import { buildNodeRequestOverview } from "@/lib/requestOverview";
-import { formatSnapshotCost, formatSnapshotTokens } from "@/lib/snapshotMetrics";
 import {
   EVAL_CHECK_ICONS,
   formatEvalStatus,
@@ -38,6 +35,7 @@ import {
   getEvalCheckLabel,
   getEvalDetail,
 } from "@/lib/evalPresentation";
+import { buildSnapshotRiskSummary } from "@/lib/snapshotRiskSummary";
 
 export interface SnapshotForDetail {
   id: string | number;
@@ -153,13 +151,13 @@ function buildToolSummaryEmptyLines(s: SnapshotForDetail): string[] {
   if (hasSummary) return [];
   if (s.has_tool_calls) {
     return [
-      "This snapshot is flagged as having tool calls, but no argument summary was stored.",
-      "Open a fresh capture after ingest, or confirm the proxy/SDK stores tool_calls_summary when available.",
+      "Tool calls were detected, but no summary was captured for this run.",
+      "Open technical details if you need the raw request fields.",
     ];
   }
   return [
-    "No provider tool_calls summary on this snapshot.",
-    "Summaries appear when the captured LLM response includes tool_calls or when ingest stores tool_calls_summary.",
+    "No tool call summary was captured for this run.",
+    "Open technical details if you need the raw ingest fields.",
   ];
 }
 
@@ -171,20 +169,19 @@ function buildToolTimelineEmptyLines(s: SnapshotForDetail): string[] {
 
   if (hasKey && events.length === 0) {
     return [
-      "tool_events was sent on ingest but is empty for this request.",
-      "Record tool_call / tool_result (and optional action) rows from your agent so the timeline can render.",
+      "Tool events were sent, but this run does not include a usable tool timeline.",
+      "Open technical details if you need the raw ingest fields.",
     ];
   }
   if (hasKey && events.length > 0) {
     return [
-      "tool_events exists in the payload but no timeline rows were produced.",
-      "Check TOOL_EVENTS_SCHEMA shape, or refresh the snapshot detail after ingest normalization.",
+      "Tool events were captured, but no normalized timeline is available for this run.",
+      "Open technical details if you need the raw ingest fields.",
     ];
   }
   return [
-    "No tool_call / tool_result timeline for this snapshot.",
-    "Send tool_events from the SDK on POST …/api-calls, or capture provider responses that include tool calls.",
-    "Tool Use Policy (Evaluation) validates policy only; it is not a substitute for a captured tool trace.",
+    "No tool timeline was captured for this run.",
+    "Open technical details if you need the raw ingest fields.",
   ];
 }
 
@@ -198,11 +195,14 @@ function buildActionsEmptyLines(s: SnapshotForDetail, actionRowCount: number): s
     return o && String(o.kind ?? o.type ?? "").toLowerCase() === "action";
   });
   if (hasAction) {
-    return ["Action events are present but did not normalize into display rows.", "See docs/TOOL_EVENTS_SCHEMA.md for action shape."];
+    return [
+      "Action events were detected, but no normalized action rows are available for this run.",
+      "Open technical details if you need the raw ingest fields.",
+    ];
   }
   return [
-    "No outbound actions (email, Slack, HTTP, etc.) recorded for this snapshot.",
-    "When your agent emits action-style side effects, include them in tool_events with kind action.",
+    "No outbound actions were recorded for this run.",
+    "Open technical details if you need the raw ingest fields.",
   ];
 }
 
@@ -228,11 +228,11 @@ function extractCustomCode(snapshot: SnapshotForDetail): string | null {
 function EmptyHint({ lines }: { lines: string[] }) {
   return (
     <div
-      className="rounded-2xl border border-dashed border-white/10 bg-[#030806] p-4 text-left space-y-2"
+      className="rounded-2xl border border-dashed border-white/10 bg-[#030806] p-4 text-left space-y-1.5"
       role="status"
     >
       {lines.map((line, i) => (
-        <p key={i} className="text-xs text-slate-500 leading-relaxed">
+        <p key={i} className="text-xs text-slate-500 leading-6">
           {line}
         </p>
       ))}
@@ -324,9 +324,34 @@ export function SnapshotDetailModal({
         })();
 
   const effectiveEvalEnabled = displayEvalRows.length > 0 || (!useOverride && evalEnabled);
+  const toolRiskIds = new Set(["tool", "tool_use_policy", "tool_grounding", "status_code"]);
+  const hasToolRelatedEvalFailure = displayEvalRows.some(
+    row => row.status === "fail" && toolRiskIds.has(row.id)
+  );
+  const hasToolEvidence =
+    hasToolSummaryCards || toolIoRows.length > 0 || actionRows.length > 0 || s.has_tool_calls;
+  const toolSectionTitle =
+    hasToolRelatedEvalFailure || hasToolEvidence ? "Tool Evidence" : "Tool Details";
 
   const failedCount = displayEvalRows.filter(r => r.status === "fail").length;
   const passedCount = displayEvalRows.filter(r => r.status === "pass").length;
+  const riskSummary = React.useMemo(
+    () =>
+      buildSnapshotRiskSummary({
+        evalRows: displayEvalRows,
+        latencyMs: s.latency_ms,
+      }),
+    [displayEvalRows, s.latency_ms]
+  );
+  const prioritizedEvalRows = React.useMemo(
+    () =>
+      [...displayEvalRows].sort((a, b) => {
+        const priority = (status: string) =>
+          status === "fail" ? 0 : status === "pass" ? 1 : 2;
+        return priority(a.status) - priority(b.status);
+      }),
+    [displayEvalRows]
+  );
 
   return (
     <motion.div
@@ -370,79 +395,200 @@ export function SnapshotDetailModal({
         </div>
 
         <div className="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar">
-          <div className="bg-[#030806] p-6 rounded-[24px] mb-10 shadow-inner shrink-0">
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
-                <Activity className="w-6 h-6 text-blue-500 mb-1" />
-                <span className="text-sm font-medium text-slate-400">Status</span>
-                <span
-                  className={clsx(
-                    "text-lg font-black uppercase tracking-wider",
-                    failedCount === 0
-                      ? "text-emerald-400"
-                      : passedCount > 0 && failedCount > 0
-                        ? "text-amber-500"
-                        : "text-rose-400"
-                  )}
-                >
-                  {failedCount === 0
-                    ? "PASS"
-                    : passedCount > 0 && failedCount > 0
-                      ? "PARTIAL"
-                      : "FAIL"}
-                </span>
-              </div>
-              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
-                <Zap className="w-6 h-6 text-amber-500 mb-1" />
-                <span className="text-sm font-medium text-slate-400">Latency</span>
-                <span className="text-lg font-black text-slate-200">
-                  {s.latency_ms != null ? `${s.latency_ms}ms` : "—"}
-                </span>
-              </div>
-              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
-                <Coins className="w-6 h-6 text-violet-400 mb-1" />
-                <span className="text-sm font-medium text-slate-400">Tokens</span>
-                <span
-                  className="text-lg font-black text-slate-200 tabular-nums"
-                  title={s.tokens_used != null ? String(s.tokens_used) : undefined}
-                >
-                  {formatSnapshotTokens(s.tokens_used)}
-                </span>
-              </div>
-              <div className="bg-[#18191e] border border-white/5 rounded-[20px] p-5 flex flex-col items-center justify-center gap-2 hover:border-white/10 transition-colors">
-                <CircleDollarSign className="w-6 h-6 text-emerald-400/90 mb-1" />
-                <span className="text-sm font-medium text-slate-400">Cost</span>
-                <span
-                  className="text-lg font-black text-slate-200 tabular-nums"
-                  title={s.cost != null && s.cost !== "" ? String(s.cost) : undefined}
-                >
-                  {formatSnapshotCost(s.cost)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {releaseGateHref ? (
-            <div className="mb-8 rounded-2xl border border-emerald-500/20 bg-emerald-950/25 px-4 py-3 text-sm text-slate-300">
-              <span className="font-semibold text-slate-200">Pre-deploy verification: </span>
-              Use{" "}
-              <Link
-                href={releaseGateHref}
-                className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
-              >
-                Release Gate
-              </Link>{" "}
-              to replay production snapshots with a candidate model or tool configuration before you ship.
-            </div>
-          ) : null}
-
           <div className="flex flex-col gap-12 shrink-0">
+            <SnapshotRiskHero summary={riskSummary} releaseGateHref={releaseGateHref} />
+
             <div className="space-y-8">
-              <div className="rounded-[24px] border border-white/5 bg-[#0f1115] p-6 shadow-inner">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+                  <AlignLeft className="w-5 h-5 text-emerald-400" />
+                  <span className="text-sm font-bold text-emerald-400 uppercase tracking-widest">
+                    Captured Response
+                  </span>
+                </div>
+                <div className="bg-[#022c22]/20 border border-emerald-500/20 rounded-[20px] p-6 text-sm text-emerald-200 font-mono leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30 overflow-x-auto shadow-inner">
+                  {safeStringify(s.response_text ?? s.response)}
+                </div>
+              </div>
+
+              <div
+                className={clsx(
+                  "flex flex-col gap-4 rounded-2xl transition-colors",
+                  isSavedAppearance &&
+                    "border border-dashed border-amber-500/10 border-slate-600/30 bg-slate-800/40 bg-amber-950/20 p-4"
+                )}
+              >
+                <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                  <div className="flex items-center gap-3">
+                    {isSavedAppearance ? (
+                      <Clock className="w-5 h-5 text-amber-200/90" aria-hidden />
+                    ) : (
+                      <Scale className="w-5 h-5 text-slate-400" />
+                    )}
+                    <span
+                      className={clsx(
+                        "text-sm font-bold uppercase tracking-widest",
+                        isSavedAppearance ? "text-slate-400" : "text-slate-200"
+                      )}
+                    >
+                      Evaluation Evidence
+                    </span>
+                  </div>
+                </div>
+                {isSavedAppearance && (
+                  <p className="text-[11px] text-amber-200/90 -mt-1 mb-1" role="status">
+                    Snapshot at capture · Eval result from that time
+                  </p>
+                )}
+                {evalContextLabel && (
+                  <p
+                    className={clsx(
+                      "text-xs italic -mt-1 mb-2",
+                      isSavedAppearance ? "text-slate-400" : "text-slate-500"
+                    )}
+                  >
+                    {evalContextLabel}
+                  </p>
+                )}
+                {displayEvalRows.length > 0 ? (
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
+                      {useOverride ? "Results from replay or override" : "Results from captured snapshot"}
+                    </span>
+                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100/90">
+                      Thresholds from current saved settings
+                    </span>
+                  </div>
+                ) : null}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {effectiveEvalEnabled &&
+                    prioritizedEvalRows.map(row => {
+                      const detail = getEvalDetail(s, row.id, savedEvalConfig);
+                      const EvalIcon = EVAL_CHECK_ICONS[row.id] ?? Scale;
+                      return (
+                        <div
+                          key={row.id}
+                          className={clsx(
+                            "p-5 rounded-[20px] flex flex-col items-center text-center gap-3 transition-colors",
+                            isSavedAppearance
+                              ? "bg-slate-800/40 border border-dashed border-slate-600/30"
+                              : "bg-[#18191e] border border-white/5 hover:border-white/10"
+                          )}
+                        >
+                          <div
+                            className={clsx(
+                              "p-3 rounded-2xl",
+                              isSavedAppearance
+                                ? "bg-slate-600/30 border border-slate-500/20"
+                                : "bg-blue-500/10 border border-blue-500/20"
+                            )}
+                          >
+                            <EvalIcon
+                              className={clsx(
+                                "w-6 h-6",
+                                isSavedAppearance ? "text-slate-400" : "text-blue-400"
+                              )}
+                            />
+                          </div>
+                          <span
+                            className={clsx(
+                              "text-sm font-medium mt-1 line-clamp-1",
+                              isSavedAppearance ? "text-slate-400" : "text-slate-200"
+                            )}
+                            title={getEvalCheckLabel(row.id)}
+                          >
+                            {getEvalCheckLabel(row.id, row.id)}
+                          </span>
+                          <div className="flex-1" />
+                          {(detail.actualStr !== "?" || detail.configStr !== "?") && (
+                            <div className="flex flex-col items-center gap-1 text-xs font-mono mb-2">
+                              {detail.actualStr !== "?" ? (
+                                <span
+                                  className={clsx(
+                                    row.status === "fail" && "font-bold",
+                                    row.status === "fail"
+                                      ? isSavedAppearance
+                                        ? "text-rose-300"
+                                        : "text-rose-400"
+                                      : isSavedAppearance
+                                        ? "text-slate-400"
+                                        : "text-slate-300"
+                                  )}
+                                >
+                                  {detail.actualStr}
+                                </span>
+                              ) : null}
+                              {detail.configStr !== "?" ? (
+                                <span className="text-[10px] text-slate-500">
+                                  {detail.actualStr !== "?"
+                                    ? `Threshold: ${detail.configStr}`
+                                    : detail.configStr}
+                                </span>
+                              ) : null}
+                            </div>
+                          )}
+                          <span
+                            className={clsx(
+                              "px-3 py-1 text-xs font-black uppercase tracking-widest rounded-xl w-full",
+                              row.status === "pass"
+                                ? isSavedAppearance
+                                  ? "bg-emerald-500/20 text-emerald-300"
+                                  : "bg-emerald-500/10 text-emerald-400"
+                                : row.status === "fail"
+                                  ? isSavedAppearance
+                                    ? "bg-rose-500/20 text-rose-300"
+                                    : "bg-rose-500/10 text-rose-400"
+                                  : "bg-slate-500/10 text-slate-500"
+                            )}
+                          >
+                            {formatEvalStatus(row.status)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+                {effectiveEvalEnabled && displayEvalRows.length === 0 && (
+                  <p
+                    className={clsx(
+                      "text-sm italic p-4 text-center rounded-2xl",
+                      isSavedAppearance
+                        ? "text-slate-400 border border-dashed border-slate-600/30"
+                        : "text-slate-500 border border-dashed border-white/10"
+                    )}
+                  >
+                    No eval result for this snapshot.
+                  </p>
+                )}
+                {!evalContextLabel && displayEvalRows.length > 0 && !useOverride ? (
+                  <p className="text-[11px] text-slate-500 text-center leading-relaxed px-1">
+                    Result source: snapshot at capture time. Threshold text below uses the current saved
+                    evaluation settings, so it may differ if settings changed later.
+                  </p>
+                ) : null}
+                {useOverride && displayEvalRows.length > 0 ? (
+                  <p className="text-[11px] text-slate-500 text-center leading-relaxed px-1">
+                    Result source: replay or override context. Threshold text below uses the current saved
+                    evaluation settings.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col gap-6 rounded-[24px] border border-white/5 bg-[#0f1115] p-6 shadow-inner">
                 <div className="flex items-center gap-3 border-b border-white/5 pb-3">
                   <SlidersHorizontal className="h-5 w-5 text-fuchsia-400" />
                   <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
-                    Node Request Overview
+                    Technical Details
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-slate-500">
+                  Request structure, captured context, and execution traces for deeper inspection.
+                </p>
+
+                <div className="rounded-[20px] border border-white/5 bg-black/10 p-6 shadow-inner">
+                <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+                  <SlidersHorizontal className="h-5 w-5 text-fuchsia-400" />
+                  <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
+                    Request Overview
                   </span>
                 </div>
                 <p className="mt-3 text-xs leading-relaxed text-slate-500">
@@ -578,21 +724,24 @@ export function SnapshotDetailModal({
                     </div>
                   </div>
                 ) : null}
-              </div>
+                </div>
 
-              <RequestContextPanel snapshot={s} />
+                <RequestContextPanel snapshot={s} />
 
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-5 rounded-[24px] border border-white/5 bg-[#0f1115] p-6 shadow-inner">
                 <div className="flex items-center gap-3 border-b border-white/5 pb-3">
                   <Wrench className="w-5 h-5 text-amber-500" />
                   <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">
-                    Tool activity
+                    {toolSectionTitle}
                   </span>
                 </div>
+                <p className="text-xs leading-relaxed text-slate-500">
+                  Captured tool calls, tool I/O, and outbound actions for this run.
+                </p>
 
                 <div className="space-y-3">
                   <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Tool calls (provider summary)
+                    Tool Calls
                   </div>
                   {hasToolSummaryCards ? (
                     <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 shadow-inner space-y-4">
@@ -618,7 +767,7 @@ export function SnapshotDetailModal({
                   {toolIoRows.length > 0 ? (
                     <ToolTimelinePanel
                       rows={toolIoRows}
-                      title="Tool timeline (calls & I/O)"
+                      title="Tool Timeline"
                       icon={Terminal}
                       variant="snapshot"
                     />
@@ -627,7 +776,7 @@ export function SnapshotDetailModal({
                       <div className="flex items-center gap-3 border-b border-white/5 pb-3">
                         <Terminal className="h-5 w-5 text-sky-400" aria-hidden />
                         <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
-                          Tool timeline (calls &amp; I/O)
+                          Tool Timeline
                         </span>
                       </div>
                       <EmptyHint lines={timelineEmptyLines} />
@@ -639,8 +788,8 @@ export function SnapshotDetailModal({
                   {actionRows.length > 0 ? (
                     <ToolTimelinePanel
                       rows={actionRows}
-                      title="Actions (side effects)"
-                      subtitle="Outbound: email, Slack, HTTP, etc. — not LLM tool reads"
+                      title="Actions"
+                      subtitle="Outbound effects such as email, Slack, or HTTP."
                       icon={Send}
                       variant="snapshot"
                     />
@@ -650,11 +799,11 @@ export function SnapshotDetailModal({
                         <div className="flex items-center gap-3">
                           <Send className="h-5 w-5 text-sky-400" aria-hidden />
                           <span className="text-sm font-bold uppercase tracking-widest text-slate-200">
-                            Actions (side effects)
+                            Actions
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 pl-8">
-                          Outbound: email, Slack, HTTP, etc. — not LLM tool reads
+                          Outbound effects such as email, Slack, or HTTP.
                         </p>
                       </div>
                       <EmptyHint lines={actionsEmptyLines} />
@@ -663,8 +812,8 @@ export function SnapshotDetailModal({
                 </div>
               </div>
 
-              {customCode && (
-                <div className="flex flex-col gap-4">
+                {customCode && (
+                  <div className="flex flex-col gap-4">
                   <div className="flex items-center gap-3 border-b border-white/5 pb-3">
                     <Terminal className="w-5 h-5 text-emerald-400" />
                     <span className="text-sm font-bold text-emerald-400 uppercase tracking-widest">
@@ -674,191 +823,10 @@ export function SnapshotDetailModal({
                   <div className="bg-[#030806] border border-emerald-500/10 rounded-[20px] p-6 text-sm text-slate-300 font-mono leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30 overflow-x-auto shadow-inner">
                     {customCode}
                   </div>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-                  <AlignLeft className="w-5 h-5 text-emerald-400" />
-                  <span className="text-sm font-bold text-emerald-400 uppercase tracking-widest">
-                    Agent Response
-                  </span>
-                </div>
-                <div className="bg-[#022c22]/20 border border-emerald-500/20 rounded-[20px] p-6 text-sm text-emerald-200 font-mono leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30 overflow-x-auto shadow-inner">
-                  {safeStringify(s.response_text ?? s.response)}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-10">
-              <div
-                className={clsx(
-                  "flex flex-col gap-4 rounded-2xl transition-colors",
-                  isSavedAppearance &&
-                    "border border-dashed border-amber-500/10 border-slate-600/30 bg-slate-800/40 bg-amber-950/20 p-4"
-                )}
-              >
-                <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                  <div className="flex items-center gap-3">
-                    {isSavedAppearance ? (
-                      <Clock className="w-5 h-5 text-amber-200/90" aria-hidden />
-                    ) : (
-                      <Scale className="w-5 h-5 text-slate-400" />
-                    )}
-                    <span
-                      className={clsx(
-                        "text-sm font-bold uppercase tracking-widest",
-                        isSavedAppearance ? "text-slate-400" : "text-slate-200"
-                      )}
-                    >
-                      Evaluation
-                    </span>
                   </div>
-                </div>
-                {isSavedAppearance && (
-                  <p className="text-[11px] text-amber-200/90 -mt-1 mb-1" role="status">
-                    Snapshot at capture · Eval result from that time
-                  </p>
                 )}
-                {evalContextLabel && (
-                  <p
-                    className={clsx(
-                      "text-xs italic -mt-1 mb-2",
-                      isSavedAppearance ? "text-slate-400" : "text-slate-500"
-                    )}
-                  >
-                    {evalContextLabel}
-                  </p>
-                )}
-                {displayEvalRows.length > 0 ? (
-                  <div className="mb-4 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
-                      {useOverride ? "Results from replay or override" : "Results from captured snapshot"}
-                    </span>
-                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-100/90">
-                      Thresholds from current saved settings
-                    </span>
-                  </div>
-                ) : null}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {effectiveEvalEnabled &&
-                    displayEvalRows.map(row => {
-                      const detail = getEvalDetail(s, row.id, savedEvalConfig);
-                      const EvalIcon = EVAL_CHECK_ICONS[row.id] ?? Scale;
-                      return (
-                        <div
-                          key={row.id}
-                          className={clsx(
-                            "p-5 rounded-[20px] flex flex-col items-center text-center gap-3 transition-colors",
-                            isSavedAppearance
-                              ? "bg-slate-800/40 border border-dashed border-slate-600/30"
-                              : "bg-[#18191e] border border-white/5 hover:border-white/10"
-                          )}
-                        >
-                          <div
-                            className={clsx(
-                              "p-3 rounded-2xl",
-                              isSavedAppearance
-                                ? "bg-slate-600/30 border border-slate-500/20"
-                                : "bg-blue-500/10 border border-blue-500/20"
-                            )}
-                          >
-                            <EvalIcon
-                              className={clsx(
-                                "w-6 h-6",
-                                isSavedAppearance ? "text-slate-400" : "text-blue-400"
-                              )}
-                            />
-                          </div>
-                          <span
-                            className={clsx(
-                              "text-sm font-medium mt-1 line-clamp-1",
-                              isSavedAppearance ? "text-slate-400" : "text-slate-200"
-                            )}
-                            title={getEvalCheckLabel(row.id)}
-                          >
-                            {getEvalCheckLabel(row.id, row.id)}
-                          </span>
-                          <div className="flex-1" />
-                          {(detail.actualStr !== "—" || detail.configStr !== "—") && (
-                            <div className="flex flex-col items-center gap-1 text-xs font-mono mb-2">
-                              {detail.actualStr !== "—" ? (
-                                <span
-                                  className={clsx(
-                                    row.status === "fail" && "font-bold",
-                                    row.status === "fail"
-                                      ? isSavedAppearance
-                                        ? "text-rose-300"
-                                        : "text-rose-400"
-                                      : isSavedAppearance
-                                        ? "text-slate-400"
-                                        : "text-slate-300"
-                                  )}
-                                >
-                                  {detail.actualStr}
-                                </span>
-                              ) : null}
-                              {detail.configStr !== "—" ? (
-                                <span
-                                  className={clsx(
-                                    "text-[10px]",
-                                    isSavedAppearance ? "text-slate-500" : "text-slate-500"
-                                  )}
-                                >
-                                  {detail.actualStr !== "—"
-                                    ? `Threshold: ${detail.configStr}`
-                                    : detail.configStr}
-                                </span>
-                              ) : null}
-                            </div>
-                          )}
-                          <span
-                            className={clsx(
-                              "px-3 py-1 text-xs font-black uppercase tracking-widest rounded-xl w-full",
-                              row.status === "pass"
-                                ? isSavedAppearance
-                                  ? "bg-emerald-500/20 text-emerald-300"
-                                  : "bg-emerald-500/10 text-emerald-400"
-                                : row.status === "fail"
-                                  ? isSavedAppearance
-                                    ? "bg-rose-500/20 text-rose-300"
-                                    : "bg-rose-500/10 text-rose-400"
-                                  : "bg-slate-500/10 text-slate-500"
-                            )}
-                          >
-                            {formatEvalStatus(row.status)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                </div>
-                {effectiveEvalEnabled && displayEvalRows.length === 0 && (
-                  <p
-                    className={clsx(
-                      "text-sm italic p-4 text-center rounded-2xl",
-                      isSavedAppearance
-                        ? "text-slate-400 border border-dashed border-slate-600/30"
-                        : "text-slate-500 border border-dashed border-white/10"
-                    )}
-                  >
-                    No eval result for this snapshot.
-                  </p>
-                )}
-                {!evalContextLabel && displayEvalRows.length > 0 && !useOverride ? (
-                  <p className="text-[11px] text-slate-500 text-center leading-relaxed px-1">
-                    Result source: snapshot at capture time. Threshold text below uses the current saved
-                    evaluation settings, so it may differ if settings changed later.
-                  </p>
-                ) : null}
-                {useOverride && displayEvalRows.length > 0 ? (
-                  <p className="text-[11px] text-slate-500 text-center leading-relaxed px-1">
-                    Result source: replay or override context. Threshold text below uses the current saved
-                    evaluation settings.
-                  </p>
-                ) : null}
-              </div>
 
-              <div className="flex flex-col gap-4 mt-10">
+                <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-3 border-b border-white/5 pb-3">
                   <Activity className="w-5 h-5 text-slate-400" />
                   <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">
@@ -915,6 +883,7 @@ export function SnapshotDetailModal({
                     </div>
                   ))}
                 </div>
+              </div>
               </div>
             </div>
           </div>
