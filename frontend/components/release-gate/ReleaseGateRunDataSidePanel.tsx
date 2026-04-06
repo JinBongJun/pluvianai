@@ -152,18 +152,14 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                       <div className="min-w-0 text-[11px] leading-snug text-white/65">
                         <span className="font-medium text-white/85">
                           {dataSource === "datasets"
-                            ? runDatasetIds.length > 0
-                              ? `${runDatasetIds.length} selected`
-                              : "No inputs selected"
-                            : runSnapshotIds.length > 0
-                              ? `${runSnapshotIds.length} selected`
-                              : "No inputs selected"}
+                            ? `${runDatasetIds.length} selected`
+                            : `${runSnapshotIds.length} selected`}
                         </span>
-                        <span className="text-white/35"> ? </span>
+                        <span className="px-1 text-white/25">·</span>
                         <span>{dataPanelTab === "logs" ? "Live source" : "Saved source"}</span>
-                        <span className="text-white/35"> ? </span>
+                        <span className="px-1 text-white/25">·</span>
                         <span>
-                          Showing {filteredRecentSnapshots.length} of {logsMatchCount} snapshots
+                          {filteredRecentSnapshots.length} of {logsMatchCount} shown
                         </span>
                       </div>
 

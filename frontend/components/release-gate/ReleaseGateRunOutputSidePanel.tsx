@@ -133,7 +133,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
         {rightPanelTab === "results" && (
           <div className="flex-1 space-y-4 p-4">
             <div
-              className="flex w-full gap-0.5 rounded-xl border border-white/8 bg-black/20 p-1"
+              className="flex w-full gap-0.5 rounded-xl bg-black/20 p-1 ring-1 ring-white/[0.05]"
               role="group"
               aria-label="Filter result rows"
             >
@@ -179,7 +179,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                   <div
                     key={latestResultCard.reportId}
                     data-testid="rg-result-report-0"
-                    className="space-y-3 rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+                    className="space-y-3 rounded-2xl bg-white/[0.02] p-3 ring-1 ring-white/[0.05]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -273,14 +273,14 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                       ) : null}
                     </div>
 
-                    <details className="group rounded-2xl border border-white/8 bg-black/20">
+                    <details className="group rounded-2xl bg-black/20 ring-1 ring-white/[0.05]">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-white/80 marker:content-none">
                         <span>View case results</span>
                         <span className="text-[11px] text-white/35">Expand</span>
                       </summary>
                       <div className="border-t border-white/6 px-3 py-3">
                         {latestResultCard.visibleResultCases.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-4 text-sm text-white/30">
+                          <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-4 text-sm text-white/30">
                             {resultCaseFilter === "failed"
                               ? "No inputs need review in this run."
                               : resultCaseFilter === "passed"
@@ -328,7 +328,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                 ) : null}
 
                 {earlierResultCards.length > 0 ? (
-                  <details className="group rounded-2xl border border-white/8 bg-black/20">
+                  <details className="group rounded-2xl bg-black/20 ring-1 ring-white/[0.05]">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-white/75 marker:content-none">
                       <span>Earlier results</span>
                       <span className="text-[11px] text-white/35">
@@ -340,7 +340,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                         <div
                           key={card.reportId}
                           data-testid={`rg-result-report-${idx + 1}`}
-                          className="rounded-2xl border border-white/8 bg-white/[0.02] p-3"
+                          className="group rounded-2xl bg-white/[0.02] p-3 ring-1 ring-white/[0.05]"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
@@ -370,6 +370,57 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                             <span className="h-1 w-1 rounded-full bg-white/20" />
                             <span>Repeats: {Number(card.result.repeat_runs ?? repeatRuns)}</span>
                           </div>
+                          <details className="group mt-3 rounded-2xl bg-black/20 ring-1 ring-white/[0.05]">
+                            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-white/80 marker:content-none">
+                              <span>View case results</span>
+                              <span className="text-[11px] text-white/35">Expand</span>
+                            </summary>
+                            <div className="border-t border-white/6 px-3 py-3">
+                              {card.visibleResultCases.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-4 text-sm text-white/30">
+                                  {resultCaseFilter === "failed"
+                                    ? "No inputs need review in this run."
+                                    : resultCaseFilter === "passed"
+                                      ? "No healthy inputs in this run."
+                                      : "No per-input result rows returned for this run."}
+                                </div>
+                              ) : (
+                                <div className="flex flex-col gap-2">
+                                  {card.visibleResultCases.map(({ run, caseIndex: caseIndex }) => {
+                                    const baselineSnapshotForRun =
+                                      (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
+                                        | Record<string, unknown>
+                                        | undefined) ??
+                                      (recentSnapshots.find(
+                                        s =>
+                                          String((s as Record<string, unknown>)?.id ?? "") ===
+                                          String(run?.snapshot_id ?? "")
+                                      ) as Record<string, unknown> | undefined) ??
+                                      null;
+
+                                    return (
+                                      <ResultCaseRowButton
+                                        key={`${card.reportId}-${caseIndex}`}
+                                        run={run}
+                                        idx={caseIndex}
+                                        repeatRunsFallback={card.result.repeat_runs ?? repeatRuns}
+                                        baselineSnapshotForRun={baselineSnapshotForRun}
+                                        onSelect={({ attempts, caseIndex: selectedCaseIndex, baselineSnapshot }) =>
+                                          setDetailAttemptView({
+                                            attempts,
+                                            caseIndex: selectedCaseIndex,
+                                            initialAttemptIndex: 0,
+                                            baselineSnapshot,
+                                          })
+                                        }
+                                        testId={`rg-result-report-${idx + 1}-case-${caseIndex}`}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </details>
                         </div>
                       ))}
                     </div>
