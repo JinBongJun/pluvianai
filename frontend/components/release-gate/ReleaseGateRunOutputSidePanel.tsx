@@ -337,91 +337,93 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                     </summary>
                     <div className="space-y-3 border-t border-white/6 px-3 py-3">
                       {earlierResultCards.map((card, idx) => (
-                        <div
+                        <details
                           key={card.reportId}
                           data-testid={`rg-result-report-${idx + 1}`}
                           className="group rounded-2xl bg-white/[0.02] p-3 ring-1 ring-white/[0.05]"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
+                          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 marker:content-none">
+                            <div className="min-w-0 flex-1">
                               <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">
                                 Earlier result {idx + 1}
                               </div>
                               <div className="mt-1 text-[11px] text-white/45">
                                 {formatDateTime(new Date(card.completedAtMs).toISOString())}
                               </div>
+                              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-white/60">
+                                <span className={clsx("font-semibold", card.result.pass ? "text-emerald-300" : "text-rose-300")}>
+                                  {card.result.pass ? "Looks good" : "Needs review"}
+                                </span>
+                                <span className="h-1 w-1 rounded-full bg-white/20" />
+                                <span>Inputs: {Number(card.result.total_inputs ?? 0)}</span>
+                                <span className="h-1 w-1 rounded-full bg-white/20" />
+                                <span>Repeats: {Number(card.result.repeat_runs ?? repeatRuns)}</span>
+                              </div>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => dismissResult(card.reportId)}
-                              className="rounded-md border border-white/10 bg-black/20 p-1 text-white/45 transition hover:text-white"
-                              title="Hide result"
-                              aria-label="Hide result"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-white/60">
-                            <span className={clsx("font-semibold", card.result.pass ? "text-emerald-300" : "text-rose-300")}>
-                              {card.result.pass ? "Looks good" : "Needs review"}
-                            </span>
-                            <span className="h-1 w-1 rounded-full bg-white/20" />
-                            <span>Inputs: {Number(card.result.total_inputs ?? 0)}</span>
-                            <span className="h-1 w-1 rounded-full bg-white/20" />
-                            <span>Repeats: {Number(card.result.repeat_runs ?? repeatRuns)}</span>
-                          </div>
-                          <details className="group mt-3 rounded-2xl bg-black/20 ring-1 ring-white/[0.05]">
-                            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-white/80 marker:content-none">
-                              <span>View case results</span>
-                              <span className="text-[11px] text-white/35">Expand</span>
-                            </summary>
-                            <div className="border-t border-white/6 px-3 py-3">
-                              {card.visibleResultCases.length === 0 ? (
-                                <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-4 text-sm text-white/30">
-                                  {resultCaseFilter === "failed"
-                                    ? "No inputs need review in this run."
-                                    : resultCaseFilter === "passed"
-                                      ? "No healthy inputs in this run."
-                                      : "No per-input result rows returned for this run."}
-                                </div>
-                              ) : (
-                                <div className="flex flex-col gap-2">
-                                  {card.visibleResultCases.map(({ run, caseIndex: caseIndex }) => {
-                                    const baselineSnapshotForRun =
-                                      (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
-                                        | Record<string, unknown>
-                                        | undefined) ??
-                                      (recentSnapshots.find(
-                                        s =>
-                                          String((s as Record<string, unknown>)?.id ?? "") ===
-                                          String(run?.snapshot_id ?? "")
-                                      ) as Record<string, unknown> | undefined) ??
-                                      null;
+                            <div className="flex items-start gap-2">
+                              <span className="mt-0.5 text-[11px] text-white/35 group-open:hidden">Expand</span>
+                              <span className="mt-0.5 hidden text-[11px] text-white/35 group-open:inline">Collapse</span>
+                              <button
+                                type="button"
+                                onClick={e => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  dismissResult(card.reportId);
+                                }}
+                                className="rounded-md border border-white/10 bg-black/20 p-1 text-white/45 transition hover:text-white"
+                                title="Hide result"
+                                aria-label="Hide result"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </summary>
+                          <div className="mt-3 border-t border-white/6 pt-3">
+                            {card.visibleResultCases.length === 0 ? (
+                              <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-3 py-4 text-sm text-white/30">
+                                {resultCaseFilter === "failed"
+                                  ? "No inputs need review in this run."
+                                  : resultCaseFilter === "passed"
+                                    ? "No healthy inputs in this run."
+                                    : "No per-input result rows returned for this run."}
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-2">
+                                {card.visibleResultCases.map(({ run, caseIndex: caseIndex }) => {
+                                  const baselineSnapshotForRun =
+                                    (baselineSnapshotsById.get(String(run?.snapshot_id ?? "")) as
+                                      | Record<string, unknown>
+                                      | undefined) ??
+                                    (recentSnapshots.find(
+                                      s =>
+                                        String((s as Record<string, unknown>)?.id ?? "") ===
+                                        String(run?.snapshot_id ?? "")
+                                    ) as Record<string, unknown> | undefined) ??
+                                    null;
 
-                                    return (
-                                      <ResultCaseRowButton
-                                        key={`${card.reportId}-${caseIndex}`}
-                                        run={run}
-                                        idx={caseIndex}
-                                        repeatRunsFallback={card.result.repeat_runs ?? repeatRuns}
-                                        baselineSnapshotForRun={baselineSnapshotForRun}
-                                        onSelect={({ attempts, caseIndex: selectedCaseIndex, baselineSnapshot }) =>
-                                          setDetailAttemptView({
-                                            attempts,
-                                            caseIndex: selectedCaseIndex,
-                                            initialAttemptIndex: 0,
-                                            baselineSnapshot,
-                                          })
-                                        }
-                                        testId={`rg-result-report-${idx + 1}-case-${caseIndex}`}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          </details>
-                        </div>
+                                  return (
+                                    <ResultCaseRowButton
+                                      key={`${card.reportId}-${caseIndex}`}
+                                      run={run}
+                                      idx={caseIndex}
+                                      repeatRunsFallback={card.result.repeat_runs ?? repeatRuns}
+                                      baselineSnapshotForRun={baselineSnapshotForRun}
+                                      onSelect={({ attempts, caseIndex: selectedCaseIndex, baselineSnapshot }) =>
+                                        setDetailAttemptView({
+                                          attempts,
+                                          caseIndex: selectedCaseIndex,
+                                          initialAttemptIndex: 0,
+                                          baselineSnapshot,
+                                        })
+                                      }
+                                      testId={`rg-result-report-${idx + 1}-case-${caseIndex}`}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </details>
                       ))}
                     </div>
                   </details>
