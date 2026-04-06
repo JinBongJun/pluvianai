@@ -1,10 +1,8 @@
-import { buildIssueTitle, buildSurfaceStatus, formatCasePreview } from "@/components/live-view/liveIssuePresentation";
+import { buildSurfaceStatus, formatCasePreview } from "@/components/live-view/liveIssuePresentation";
 
 export function buildLiveIssueRowModel(args: {
   requestText?: string | null;
   model: string;
-  failedEvalId?: string;
-  failedEvalLabel?: string;
   hasToolDefinitions: boolean;
   hasToolResults: boolean;
   failedCount: number;
@@ -14,8 +12,6 @@ export function buildLiveIssueRowModel(args: {
   const {
     requestText,
     model,
-    failedEvalId,
-    failedEvalLabel,
     hasToolDefinitions,
     hasToolResults,
     failedCount,
@@ -24,13 +20,6 @@ export function buildLiveIssueRowModel(args: {
   } = args;
 
   return {
-    issueTitle: buildIssueTitle({
-      failedEvalId,
-      failedEvalLabel,
-      hasToolDefinitions,
-      hasToolResults,
-      failedCount,
-    }),
     casePreview: formatCasePreview(requestText),
     modelLabel: model.split("/")[1] || model,
     surfaceStatus: buildSurfaceStatus({
@@ -40,6 +29,5 @@ export function buildLiveIssueRowModel(args: {
       hasToolDefinitions,
       hasToolResults,
     }),
-    actionLabel: "Details",
   };
 }

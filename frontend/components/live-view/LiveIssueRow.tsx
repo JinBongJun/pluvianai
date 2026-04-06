@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import clsx from "clsx";
 import { CheckSquare, Square } from "lucide-react";
 
@@ -10,12 +9,10 @@ type Badge = { label: string; title: string };
 
 export function LiveIssueRow({
   id,
-  isExpanded,
   isSelectMode,
   isRemoveMode,
   isSelected,
   isRemoveSelected,
-  issueTitle,
   fullTime,
   modelLabel,
   casePreview,
@@ -24,28 +21,21 @@ export function LiveIssueRow({
   captureStateBadge,
   failedCount,
   passedCount,
-  actionHref,
-  actionLabel,
   onToggleRow,
 }: {
   id: string | number;
-  isExpanded: boolean;
   isSelectMode: boolean;
   isRemoveMode: boolean;
   isSelected: boolean;
   isRemoveSelected: boolean;
-  issueTitle: string;
   fullTime: string;
   modelLabel: string;
   casePreview: string;
   surfaceStatus: SurfaceStatus;
   toolDefinitionCount: number;
   captureStateBadge: Badge | null;
-  requestShapeBadges: Badge[];
   failedCount: number;
   passedCount: number;
-  actionHref: string | null;
-  actionLabel: string;
   onToggleRow: () => void;
 }) {
   const secondaryHint = captureStateBadge?.label || (toolDefinitionCount > 0 ? "Tool setup required" : null);
@@ -55,29 +45,16 @@ export function LiveIssueRow({
       key={id}
       className={clsx(
         "group overflow-hidden border-b border-white/[0.04] transition-colors duration-200",
-        isExpanded
-          ? clsx(
-              "bg-white/[0.02]",
-              failedCount > 0
-                ? "border-l-[2px] border-l-rose-500/40"
-                : passedCount > 0
-                  ? "border-l-[2px] border-l-emerald-500/40"
-                  : "border-l-[2px] border-l-emerald-500/20"
-            )
-          : clsx(
-              "border-l-[2px] border-l-transparent",
-              failedCount > 0
-                ? "bg-rose-500/[0.03] hover:bg-rose-500/[0.06]"
-                : passedCount > 0
-                  ? "bg-emerald-500/[0.02] hover:bg-emerald-500/[0.05]"
-                  : "hover:bg-white/[0.03]"
-            )
+        failedCount > 0
+          ? "bg-rose-500/[0.03] hover:bg-rose-500/[0.06]"
+          : passedCount > 0
+            ? "bg-emerald-500/[0.02] hover:bg-emerald-500/[0.05]"
+            : "hover:bg-white/[0.03]"
       )}
     >
       <button
         type="button"
         onClick={onToggleRow}
-        aria-expanded={!isSelectMode && !isRemoveMode ? isExpanded : undefined}
         className="flex w-full cursor-pointer items-center justify-between px-6 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
       >
         <div className="flex min-w-0 flex-1 items-center gap-4 pr-4">
@@ -98,26 +75,21 @@ export function LiveIssueRow({
               )}
             </div>
           ) : (
-            <div className="flex w-[14rem] min-w-0 shrink-0 flex-col">
-              <div className="flex items-center gap-2">
-                <div
-                  className={clsx(
-                    "h-2 w-2 shrink-0 rounded-full",
-                    surfaceStatus.tone === "attention"
-                      ? "bg-rose-500/80 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
-                      : "bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.3)]"
-                  )}
-                />
-                <span className="truncate text-[13px] font-semibold text-slate-100">{issueTitle}</span>
-              </div>
-              <div className="mt-1 truncate text-[11px] tabular-nums text-slate-500" title={fullTime}>
-                {fullTime} · {modelLabel}
-              </div>
-            </div>
+            <div
+              className={clsx(
+                "mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full",
+                surfaceStatus.tone === "attention"
+                  ? "bg-rose-500/80 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
+                  : "bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+              )}
+            />
           )}
 
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[14px] text-slate-300">{casePreview}</p>
+            <p className="truncate text-[14px] font-medium text-slate-200">{casePreview}</p>
+            <div className="mt-1 truncate text-[11px] tabular-nums text-slate-500">
+              {fullTime} · {modelLabel}
+            </div>
             {secondaryHint ? (
               <div className="mt-1 truncate text-[11px] text-slate-500" title={captureStateBadge?.title}>
                 {secondaryHint}
@@ -126,43 +98,20 @@ export function LiveIssueRow({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-4">
-          <div className="w-[11rem] shrink-0">
-            <div
-              className={clsx(
-                "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold",
-                surfaceStatus.tone === "attention"
-                  ? "border-rose-500/25 bg-rose-500/10 text-rose-200"
-                  : "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
-              )}
-            >
-              {surfaceStatus.label}
-            </div>
-            <div className="mt-1 truncate text-[11px] tabular-nums text-slate-500">
-              {surfaceStatus.reason}
-            </div>
+        <div className="w-[11rem] shrink-0">
+          <div
+            className={clsx(
+              "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+              surfaceStatus.tone === "attention"
+                ? "border-rose-500/25 bg-rose-500/10 text-rose-200"
+                : "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+            )}
+          >
+            {surfaceStatus.label}
           </div>
-
-          {actionHref ? (
-            <Link
-              href={actionHref}
-              onClick={event => event.stopPropagation()}
-              className="inline-flex items-center rounded-lg border border-fuchsia-500/25 bg-fuchsia-500/10 px-3 py-1.5 text-sm font-medium text-fuchsia-200 hover:bg-fuchsia-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-            >
-              {actionLabel}
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={event => {
-                event.stopPropagation();
-                onToggleRow();
-              }}
-              className="inline-flex items-center rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70"
-            >
-              {actionLabel}
-            </button>
-          )}
+          <div className="mt-1 truncate text-[11px] tabular-nums text-slate-500">
+            {surfaceStatus.reason}
+          </div>
         </div>
       </button>
     </div>
