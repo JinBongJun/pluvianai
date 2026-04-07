@@ -286,9 +286,19 @@ async def list_projects(
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(project_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_project(
+    project_id: int,
+    expected_org_id: int | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get a specific project (any member can view)"""
-    project = check_project_access(project_id, current_user, db)
+    project = check_project_access(
+        project_id,
+        current_user,
+        db,
+        expected_organization_id=expected_org_id,
+    )
     return _build_project_response(project, current_user, db)
 
 

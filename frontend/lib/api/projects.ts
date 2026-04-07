@@ -10,8 +10,15 @@ export const projectsAPI = {
     return validateArrayResponse(ProjectSchema, response.data, "/projects");
   },
 
-  get: async (id: number): Promise<Project> => {
-    const response = await apiClient.get(`/projects/${id}`);
+  get: async (
+    id: number,
+    options?: { expectedOrgId?: number | string }
+  ): Promise<Project> => {
+    const response = await apiClient.get(`/projects/${id}`, {
+      params: options?.expectedOrgId
+        ? { expected_org_id: Number(options.expectedOrgId) }
+        : undefined,
+    });
     try {
       return ProjectSchema.parse(response.data);
     } catch (error) {

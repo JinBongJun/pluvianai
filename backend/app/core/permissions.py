@@ -119,6 +119,7 @@ def check_project_access(
     db: Session,
     required_roles: Optional[List[str]] = None,
     action_label: Optional[str] = None,
+    expected_organization_id: Optional[int] = None,
 ) -> Project:
     """
     Check if user has access to project
@@ -202,6 +203,22 @@ def check_project_access(
                         "required_roles": sorted(set(required_roles)),
                         "action_label": action_label,
                         **access_context,
+                    },
+                },
+            )
+
+    if expected_organization_id is not None:
+        actual_organization_id = getattr(project, "organization_id", None)
+        if actual_organization_id != expected_organization_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "PROJECT_ORG_SCOPE_MISMATCH",
+                    "message": "Project does not belong to the requested organization scope.",
+                    "details": {
+                        "project_id": project_id,
+                        "expected_organization_id": expected_organization_id,
+                        "actual_organization_id": actual_organization_id,
                     },
                 },
             )

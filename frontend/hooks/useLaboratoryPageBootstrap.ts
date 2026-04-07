@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from "react";
 import useSWR from "swr";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api";
 import { organizationsAPI, projectsAPI } from "@/lib/api";
 import { orgKeys, projectKeys } from "@/lib/queryKeys";
+import {
+  buildCanonicalProjectPath,
+  getProjectScopeMismatchOrgId,
+} from "@/lib/projectRouteScope";
 
 type UseLaboratoryPageBootstrapOptions = {
   orgId: string;
@@ -17,6 +22,8 @@ type UseLaboratoryPageBootstrapOptions = {
 
 export function useLaboratoryPageBootstrap(options: UseLaboratoryPageBootstrapOptions) {
   const { orgId, projectId, routerReplace, swrOptions, deferSwitcherData = false } = options;
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [switcherFetchEnabled, setSwitcherFetchEnabled] = useState(
     Boolean(orgId) && !deferSwitcherData
   );
@@ -58,10 +65,25 @@ export function useLaboratoryPageBootstrap(options: UseLaboratoryPageBootstrapOp
     projectId && !isNaN(projectId) ? projectKeys.detail(projectId) : null,
     async () => {
       try {
-        return await projectsAPI.get(projectId);
+        return await projectsAPI.get(projectId, {
+          expectedOrgId: orgId,
+        });
       } catch (e: any) {
         const status = e?.response?.status;
         const msg = e?.response?.data?.detail ?? e?.response?.data?.error?.message ?? "";
+        const actualOrgId = getProjectScopeMismatchOrgId(e);
+        if (actualOrgId && pathname) {
+          routerReplace(
+            buildCanonicalProjectPath(
+              pathname,
+              orgId,
+              actualOrgId,
+              projectId,
+              searchParams?.toString() ? `?${searchParams.toString()}` : ""
+            )
+          );
+          return undefined;
+        }
         if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {
           routerReplace(orgId ? `/organizations/${orgId}/projects` : "/organizations");
           return undefined;
