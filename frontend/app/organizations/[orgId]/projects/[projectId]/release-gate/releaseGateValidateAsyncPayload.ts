@@ -1,4 +1,7 @@
-import type { ReleaseGateValidatePayload } from "@/lib/api/release-gate";
+import type {
+  ReleaseGateToolExpectationPayload,
+  ReleaseGateValidatePayload,
+} from "@/lib/api/release-gate";
 import {
   buildToolContextPayload,
   isHostedPlatformModel,
@@ -42,6 +45,49 @@ export type ReleaseGateValidateAsyncPayloadInput = {
 export type BuildReleaseGateValidateAsyncPayloadResult =
   | { ok: true; payload: ReleaseGateValidatePayload }
   | { ok: false; error: string };
+
+function buildToolExpectationsPayload(
+  toolsList: EditableTool[]
+): ReleaseGateToolExpectationPayload[] {
+  const out: ReleaseGateToolExpectationPayload[] = [];
+  for (const tool of toolsList) {
+    const name = String(tool.name || "").trim();
+    if (!name) continue;
+    const toolType = tool.toolType === "action" ? "action" : "retrieval";
+    const description = String(tool.description || "").trim() || undefined;
+    const resultGuide = String(tool.resultGuide || "").trim() || undefined;
+    const baselineSampleSummary = String(tool.baselineSampleSummary || "").trim() || undefined;
+    const mapFields = (
+      fields:
+        | Array<{ id?: string; name?: string; description?: string }>
+        | undefined
+        | null
+    ): NonNullable<ReleaseGateToolExpectationPayload["expected_result_fields"]> => {
+      const normalizedFields: NonNullable<ReleaseGateToolExpectationPayload["expected_result_fields"]> = [];
+      for (const field of Array.isArray(fields) ? fields : []) {
+        const fieldName = String(field?.name || "").trim();
+        if (!fieldName) continue;
+        normalizedFields.push({
+          name: fieldName,
+          description: String(field?.description || "").trim() || undefined,
+        });
+      }
+      return normalizedFields;
+    };
+    const expectedResultFields = mapFields(tool.expectedResultFields);
+    const expectedActionFields = mapFields(tool.expectedActionFields);
+    out.push({
+      name,
+      tool_type: toolType,
+      description,
+      result_guide: resultGuide,
+      baseline_sample_summary: baselineSampleSummary,
+      expected_result_fields: expectedResultFields.length ? expectedResultFields : undefined,
+      expected_action_fields: expectedActionFields.length ? expectedActionFields : undefined,
+    });
+  }
+  return out;
+}
 
 /**
  * Pure construction of validate-async request body (mirrors Release Gate UI rules).
@@ -187,6 +233,11 @@ export function buildReleaseGateValidateAsyncPayload(
     input.toolContextGlobalText,
     input.toolContextBySnapshotId
   );
+
+  const toolExpectations = buildToolExpectationsPayload(input.toolsList);
+  if (toolExpectations.length) {
+    payload.tool_expectations = toolExpectations;
+  }
 
   return { ok: true, payload };
 }

@@ -9,6 +9,15 @@ export type ReplayRequestMeta = {
   sampling_overrides?: Record<string, unknown> | null;
   has_new_system_prompt?: boolean;
   new_system_prompt_preview?: string | null;
+  tool_expectations?: Array<{
+    name: string;
+    tool_type: "retrieval" | "action";
+    description?: string | null;
+    result_guide?: string | null;
+    baseline_sample_summary?: string | null;
+    expected_result_fields?: Array<{ name: string; description?: string | null }> | null;
+    expected_action_fields?: Array<{ name: string; description?: string | null }> | null;
+  }> | null;
 };
 
 function previewJson(value: unknown): string {
@@ -47,13 +56,15 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
     meta?.sampling_overrides &&
     typeof meta.sampling_overrides === "object" &&
     Object.keys(meta.sampling_overrides).length > 0;
+  const toolExpectations = Array.isArray(meta?.tool_expectations) ? meta.tool_expectations : [];
 
   if (!meta) return null;
   if (
     rows.length === 0 &&
     perSnapshotApplied.length === 0 &&
     !meta.has_new_system_prompt &&
-    !hasSampling
+    !hasSampling &&
+    toolExpectations.length === 0
   ) {
     return null;
   }
@@ -64,7 +75,7 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
       data-testid="rg-replay-request-meta"
     >
       <div className="text-[9px] font-black uppercase tracking-[0.2em] text-cyan-300/90">
-        Additional request data
+        Replay request data
       </div>
       <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
         Compare the baseline request data with the values used for this replay.
@@ -139,6 +150,62 @@ export function ReleaseGateReplayRequestMetaPanel({ meta }: { meta: ReplayReques
           <pre className="mt-1 overflow-x-auto text-[10px] text-slate-300 custom-scrollbar whitespace-pre">
             {previewJson(meta.sampling_overrides)}
           </pre>
+        </div>
+      ) : null}
+
+      {toolExpectations.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/15 px-2 py-2">
+          <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+            Tool setup
+          </div>
+          <div className="mt-2 space-y-2">
+            {toolExpectations.map(tool => {
+              const fields =
+                tool.tool_type === "action"
+                  ? tool.expected_action_fields ?? []
+                  : tool.expected_result_fields ?? [];
+              return (
+                <div
+                  key={`${tool.tool_type}:${tool.name}`}
+                  className="rounded-lg border border-white/[0.06] bg-black/20 px-2 py-2"
+                >
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <span className="font-semibold text-slate-200">{tool.name}</span>
+                    <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-cyan-300/80">
+                      {tool.tool_type === "action" ? "Action" : "Retrieval"}
+                    </span>
+                  </div>
+                  {fields.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {fields.map(field => (
+                        <span
+                          key={`${tool.name}:${field.name}`}
+                          className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-slate-300"
+                          title={field.description || undefined}
+                        >
+                          {field.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {tool.baseline_sample_summary ? (
+                    <div className="mt-2 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.05] px-2 py-2 text-[10px] leading-relaxed text-emerald-100/90 whitespace-pre-wrap break-words">
+                      <div className="mb-1 font-bold uppercase tracking-wider text-emerald-300/80">
+                        Baseline sample
+                      </div>
+                      {tool.baseline_sample_summary}
+                    </div>
+                  ) : null}
+                  {tool.result_guide ? (
+                    <div className="mt-2 text-[10px] leading-relaxed text-slate-400">
+                      <span className="font-semibold text-slate-300">Extra notes:</span>{" "}
+                      {tool.result_guide}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 

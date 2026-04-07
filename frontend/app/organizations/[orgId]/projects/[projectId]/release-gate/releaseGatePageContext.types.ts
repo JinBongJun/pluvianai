@@ -20,6 +20,7 @@ export type ReleaseGateEditableTool = {
   expectedResultFields?: Array<{ id: string; name: string; description: string }>;
   expectedActionFields?: Array<{ id: string; name: string; description: string }>;
   resultGuide?: string;
+  baselineSampleSummary?: string;
 };
 
 export type ReleaseGateDatasetSummary = {

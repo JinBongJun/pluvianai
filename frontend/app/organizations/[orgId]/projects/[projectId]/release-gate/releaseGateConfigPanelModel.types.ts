@@ -97,6 +97,7 @@ export type ReleaseGateConfigPanelParityTabProps = Pick<
   | "handleBodyOverridesSnapshotBlur"
   | "handleLoadToolContextFromSnapshots"
   | "hasAnyBodyOverridesContent"
+  | "importBaselineToolSamples"
   | "isJsonModified"
   | "onBodyOverridesFileChange"
   | "onToolContextFileChange"

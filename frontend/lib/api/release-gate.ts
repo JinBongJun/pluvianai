@@ -12,6 +12,21 @@ export type ToolContextPayload = {
   inject?: ToolContextInjectPayload;
 };
 
+export type ReleaseGateToolExpectationFieldPayload = {
+  name: string;
+  description?: string;
+};
+
+export type ReleaseGateToolExpectationPayload = {
+  name: string;
+  tool_type: "retrieval" | "action";
+  description?: string;
+  result_guide?: string;
+  baseline_sample_summary?: string;
+  expected_result_fields?: ReleaseGateToolExpectationFieldPayload[];
+  expected_action_fields?: ReleaseGateToolExpectationFieldPayload[];
+};
+
 export type ReleaseGateValidatePayload = {
   agent_id?: string;
   use_recent_snapshots?: boolean;
@@ -34,6 +49,7 @@ export type ReleaseGateValidatePayload = {
   /** Per snapshot id; merged after global replay_overrides on the server. */
   replay_overrides_by_snapshot_id?: Record<string, Record<string, unknown>>;
   tool_context?: ToolContextPayload;
+  tool_expectations?: ReleaseGateToolExpectationPayload[];
   rule_ids?: string[];
   max_snapshots?: number;
   repeat_runs?: number;

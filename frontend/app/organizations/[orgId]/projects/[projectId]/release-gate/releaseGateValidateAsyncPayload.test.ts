@@ -173,6 +173,43 @@ describe("buildReleaseGateValidateAsyncPayload", () => {
     expect(r.error).toContain("valid JSON");
   });
 
+  it("includes structured tool expectations when tools are configured", () => {
+    const r = buildReleaseGateValidateAsyncPayload({
+      ...base(),
+      toolsList: [
+        {
+          id: "t1",
+          name: "get_weather",
+          description: "Fetches weather details",
+          parameters: "{\"type\":\"object\"}",
+          toolType: "retrieval",
+          expectedResultFields: [
+            { id: "f1", name: "temperature", description: "Current temperature" },
+            { id: "f2", name: "condition", description: "Weather condition" },
+          ],
+          resultGuide: "Return the current weather summary.",
+          baselineSampleSummary: "temperature=72F; condition=sunny",
+        },
+      ],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.payload.tool_expectations).toEqual([
+      {
+        name: "get_weather",
+        tool_type: "retrieval",
+        description: "Fetches weather details",
+        result_guide: "Return the current weather summary.",
+        baseline_sample_summary: "temperature=72F; condition=sunny",
+        expected_result_fields: [
+          { name: "temperature", description: "Current temperature" },
+          { name: "condition", description: "Weather condition" },
+        ],
+        expected_action_fields: undefined,
+      },
+    ]);
+  });
+
   it("uses requestBody.system_prompt over requestSystemPrompt", () => {
     const b = base();
     const r = buildReleaseGateValidateAsyncPayload({

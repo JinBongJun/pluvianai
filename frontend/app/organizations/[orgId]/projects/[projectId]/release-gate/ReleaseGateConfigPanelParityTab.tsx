@@ -47,6 +47,7 @@ export function ReleaseGateConfigPanelParityTab({
     parityOpenContext,
     setParityOpenContext,
     contextSummarySubtitle,
+    importBaselineToolSamples,
     handleRequestJsonBlur,
     handleResetJsonToBaseline,
     toolContextLoadBusy,
@@ -141,6 +142,15 @@ export function ReleaseGateConfigPanelParityTab({
           >
             <RefreshCcw className="w-3.5 h-3.5" />
             Use baseline tool setup
+          </button>
+          <button
+            type="button"
+            onClick={() => importBaselineToolSamples?.()}
+            disabled={editsLocked || baselineToolTimelineRows.length === 0}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            <RefreshCcw className="w-3.5 h-3.5" />
+            Import baseline samples
           </button>
           <button
             type="button"
@@ -253,6 +263,17 @@ export function ReleaseGateConfigPanelParityTab({
                   </div>
 
                   <div className="space-y-4">
+                    {tool.baselineSampleSummary?.trim() ? (
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+                        <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-300/90">
+                          Baseline sample
+                        </div>
+                        <div className="mt-2 text-xs leading-relaxed text-emerald-100/90 whitespace-pre-wrap break-words">
+                          {tool.baselineSampleSummary.trim()}
+                        </div>
+                      </div>
+                    ) : null}
+
                     <div className="rounded-xl border border-white/10 bg-[#0f1115] p-4">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
@@ -345,10 +366,10 @@ export function ReleaseGateConfigPanelParityTab({
                       </div>
                     </div>
 
-                    <label className="block space-y-2">
-                      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                        Extra notes (optional)
-                      </span>
+                      <label className="block space-y-2">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+                          Extra notes (optional)
+                        </span>
                       <textarea
                         value={tool.resultGuide ?? ""}
                         onChange={e => updateTool(tool.id, { resultGuide: e.target.value })}
@@ -356,8 +377,8 @@ export function ReleaseGateConfigPanelParityTab({
                         spellCheck={false}
                         placeholder={
                           toolType === "action"
-                            ? "Add any extra notes about the action, payload, or content this tool should produce."
-                            : "Add any extra notes about the information this tool should return, such as dates, titles, excerpts, or structured facts."
+                            ? "Add any extra notes about the payload or content this tool should produce."
+                            : "Add any extra notes about the information this tool should return."
                         }
                         className="min-h-[88px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
                       />

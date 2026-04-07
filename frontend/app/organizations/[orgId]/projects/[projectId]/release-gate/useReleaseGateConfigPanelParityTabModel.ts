@@ -9,6 +9,34 @@ import type { ReleaseGateEditableTool } from "./releaseGatePageContext.types";
 
 type EditableTool = ReleaseGateEditableTool;
 
+function summarizeBaselineToolResult(row: LiveViewToolTimelineRow): string {
+  const result = row.tool_result;
+  const stringify = (value: unknown): string => {
+    if (value == null) return "";
+    if (typeof value === "string") return value.trim();
+    try {
+      return JSON.stringify(value, null, 2).trim();
+    } catch {
+      return String(value).trim();
+    }
+  };
+
+  const resultObj = result && typeof result === "object" ? (result as Record<string, unknown>) : null;
+  const outputObj =
+    resultObj?.output && typeof resultObj.output === "object"
+      ? (resultObj.output as Record<string, unknown>)
+      : null;
+
+  const candidate =
+    (typeof outputObj?.preview === "string" && outputObj.preview.trim()) ||
+    (typeof resultObj?.preview === "string" && resultObj.preview.trim()) ||
+    stringify(resultObj?.output) ||
+    stringify(result);
+
+  if (!candidate) return "";
+  return candidate.length > 320 ? `${candidate.slice(0, 320)}...` : candidate;
+}
+
 export function useReleaseGateConfigPanelParityTabModel(
   c: ReleaseGateConfigPanelContextSlice,
   editsLocked: boolean,
@@ -248,6 +276,7 @@ export function useReleaseGateConfigPanelParityTabModel(
         expectedActionFields:
           toolType === "action" ? [{ id: crypto.randomUUID(), name: "", description: "" }] : [],
         resultGuide: "",
+        baselineSampleSummary: "",
       },
     ]);
   };
@@ -256,6 +285,33 @@ export function useReleaseGateConfigPanelParityTabModel(
     if (editsLocked) return;
     if (!setToolsList) return;
     setToolsList(prev => prev.filter(tool => tool.id !== toolId));
+  };
+
+  const importBaselineToolSamples = () => {
+    if (editsLocked) return;
+    if (!setToolsList) return;
+    if (!baselineToolTimelineRows.length) return;
+
+    const latestResultByTool = new Map<string, string>();
+    for (const row of baselineToolTimelineRows) {
+      const stepType = String(row.step_type || "").trim().toLowerCase();
+      const toolName = String(row.tool_name || "").trim();
+      if (stepType !== "tool_result" || !toolName) continue;
+      const summary = summarizeBaselineToolResult(row);
+      if (!summary) continue;
+      latestResultByTool.set(toolName, summary);
+    }
+
+    if (latestResultByTool.size === 0) return;
+
+    setToolsList(prev =>
+      prev.map(tool => {
+        const toolName = String(tool.name || "").trim();
+        if (!toolName) return tool;
+        const baselineSampleSummary = latestResultByTool.get(toolName);
+        return baselineSampleSummary ? { ...tool, baselineSampleSummary } : tool;
+      })
+    );
   };
 
   return {
@@ -289,6 +345,7 @@ export function useReleaseGateConfigPanelParityTabModel(
     updateTool,
     addTool,
     removeTool,
+    importBaselineToolSamples,
   };
 }
 
