@@ -46,6 +46,7 @@ export function useReleaseGateConfigPanelParityTabModel(
   const [parityOpenOverrides, setParityOpenOverrides] = useState(false);
   const [parityOpenContext, setParityOpenContext] = useState(false);
   const [parityOpenRecordedToolCalls, setParityOpenRecordedToolCalls] = useState(false);
+  const [parityOpenRawJson, setParityOpenRawJson] = useState(false);
 
   const bodyOverridesFileInputRef = useRef<HTMLInputElement>(null);
   const [bodyOverridesFileLoadTarget, setBodyOverridesFileLoadTarget] = useState<
@@ -201,24 +202,20 @@ export function useReleaseGateConfigPanelParityTabModel(
   );
 
   const toolsSummarySubtitle =
-    toolsList.length === 0 && baselineToolTimelineRows.length === 0
-      ? "No tools in this run"
-      : toolsList.length === 0
-        ? `${baselineToolTimelineRows.length} recorded event${baselineToolTimelineRows.length === 1 ? "" : "s"}; add definitions above to replay with tools`
-        : baselineToolTimelineRows.length > 0
-          ? `${toolsList.length} definition${toolsList.length === 1 ? "" : "s"}, ${baselineToolTimelineRows.length} recorded event${baselineToolTimelineRows.length === 1 ? "" : "s"}`
-          : `${toolsList.length} tool definition(s)`;
+    toolsList.length === 0
+      ? "No tools configured"
+      : `${toolsList.length} tool${toolsList.length === 1 ? "" : "s"} configured`;
   const overridesSummarySubtitle = hasAnyBodyOverridesContent
     ? perLogOverridesCount > 0
-      ? `Shared and/or per-log fields (${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
+      ? `Shared and per-log fields (${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
       : "Shared fields active"
-    : "No extra request fields";
+    : "No request context fields";
   const contextSummarySubtitle =
     toolContextMode === "inject"
       ? c.toolContextScope === "global"
-        ? "Shared extra text"
-        : "Per-log extra text (with optional fallback)"
-      : "Using recorded request data only";
+        ? "Shared missing context"
+        : "Per-log missing context"
+      : "Use baseline only";
   const timelineSummarySubtitle = !snapshotIdForBaselineTimeline
     ? "Select a baseline snapshot on the main screen"
     : baselineTimelineLoading
@@ -264,6 +261,8 @@ export function useReleaseGateConfigPanelParityTabModel(
     setParityOpenContext,
     parityOpenRecordedToolCalls,
     setParityOpenRecordedToolCalls,
+    parityOpenRawJson,
+    setParityOpenRawJson,
     bodyOverridesFileInputRef,
     onBodyOverridesFileChange,
     triggerBodyOverridesFilePick,
