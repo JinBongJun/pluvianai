@@ -17,6 +17,8 @@ export function ReleaseGateConfigPanelParityTab({
     parityOpenTools,
     setParityOpenTools,
     toolsSummarySubtitle,
+    baselinePayload,
+    candidateJsonValue,
     editsLocked,
     requestBody,
     updateRequestNumberField,
@@ -45,8 +47,11 @@ export function ReleaseGateConfigPanelParityTab({
     parityOpenContext,
     setParityOpenContext,
     contextSummarySubtitle,
+    handleRequestJsonBlur,
+    handleResetJsonToBaseline,
     toolContextLoadBusy,
     handleLoadToolContextFromSnapshots,
+    isJsonModified,
     toolContextMode,
     setToolContextMode,
     toolContextScope,
@@ -55,6 +60,8 @@ export function ReleaseGateConfigPanelParityTab({
     setToolContextGlobalText,
     setToolContextBySnapshotId,
     toolContextBySnapshotId,
+    parityOpenRawJson,
+    setParityOpenRawJson,
     parityOpenRecordedToolCalls,
     setParityOpenRecordedToolCalls,
     recordedCallsSummarySubtitle,
@@ -66,6 +73,8 @@ export function ReleaseGateConfigPanelParityTab({
     resetParityPerLogOverridesToBaseline,
     resetParityToolContextToBaseline,
     getSnapshotParityLabel,
+    requestJsonError,
+    setRequestJsonDraft,
     toolContextFileInputRef,
     onToolContextFileChange,
     triggerToolContextFilePick,
@@ -74,18 +83,17 @@ export function ReleaseGateConfigPanelParityTab({
   return (
     <>
       <p className="rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-xs leading-relaxed text-slate-500">
-        Use this tab only when replay needs more than the run-wide setup from Core.
+        Use this tab only when replay needs more than the core setup.
       </p>
 
       <CollapsiblePanel
-        title="Tool setup"
+        title="Allowed tools"
         subtitle={toolsSummarySubtitle}
         open={parityOpenTools}
         onToggle={() => setParityOpenTools(o => !o)}
       >
         <p className="mb-4 text-sm text-slate-400">
-          Define which tools the model can call during replay. Keep these aligned with the
-          baseline unless tool access itself is part of the experiment.
+          These are the tools the model can call during replay.
         </p>
         <div className="mb-4 flex flex-wrap justify-end gap-2">
           <button
@@ -95,7 +103,7 @@ export function ReleaseGateConfigPanelParityTab({
             className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             <RefreshCcw className="w-3.5 h-3.5" />
-            Reset tools to snapshot
+            Use baseline tool setup
           </button>
           <button
             type="button"
@@ -110,8 +118,7 @@ export function ReleaseGateConfigPanelParityTab({
 
         {toolsList.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-8 text-center text-sm text-slate-500">
-            No tool definitions yet. They are loaded from the representative snapshot when you
-            select logs, or add one above.
+            No tools are configured for replay.
           </div>
         ) : (
           <div className="space-y-4">
@@ -166,7 +173,7 @@ export function ReleaseGateConfigPanelParityTab({
 
                   <label className="block space-y-2">
                     <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                      Parameters (JSON Schema)
+                      Inputs schema
                     </span>
                     <textarea
                       value={tool.parameters}
@@ -246,7 +253,7 @@ export function ReleaseGateConfigPanelParityTab({
       </div>
 
       <CollapsiblePanel
-        title="Extra request fields"
+        title="Request context fields"
         subtitle={overridesSummarySubtitle}
         open={parityOpenOverrides}
         onToggle={() => setParityOpenOverrides(o => !o)}
@@ -266,8 +273,8 @@ export function ReleaseGateConfigPanelParityTab({
                 Shared fields (all selected logs)
               </div>
               <div className="text-sm text-slate-400">
-                Optional top-level JSON fields added to the replay request for every selected log
-                after Core setup JSON. Use this for things like{" "}
+                Add attachments, metadata, locale, or provider request fields for replay. Use this
+                for things like{" "}
                 <span className="font-mono text-slate-500">attachments</span>,{" "}
                 <span className="font-mono text-slate-500">documents</span>, locale, metadata, or
                 provider-specific options. It does <em>not</em> replace the saved conversation
@@ -412,7 +419,7 @@ export function ReleaseGateConfigPanelParityTab({
       </CollapsiblePanel>
 
       <CollapsiblePanel
-        title="Extra system text (optional)"
+        title="Missing context"
         subtitle={contextSummarySubtitle}
         open={parityOpenContext}
         onToggle={() => setParityOpenContext(o => !o)}
@@ -428,8 +435,8 @@ export function ReleaseGateConfigPanelParityTab({
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="text-sm text-slate-400">
-                Add short text only when the captured log is missing context you still need for a
-                faithful replay, such as a tool result summary, policy reminder, or docs snippet.
+                Add only the context missing from the baseline request, such as a short tool
+                result summary, docs snippet, or policy reminder.
                 Per-log text is pre-filled from recorded tool results when available.
               </div>
             </div>
@@ -474,7 +481,7 @@ export function ReleaseGateConfigPanelParityTab({
                 disabled={editsLocked}
                 className="accent-fuchsia-500"
               />
-              Use recorded request only
+              Use baseline only
             </label>
             <label className="inline-flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
               <input
@@ -485,7 +492,7 @@ export function ReleaseGateConfigPanelParityTab({
                 disabled={editsLocked}
                 className="accent-fuchsia-500"
               />
-              Add extra system text
+              Add missing context
             </label>
           </div>
 
@@ -625,6 +632,9 @@ export function ReleaseGateConfigPanelParityTab({
         onToggle={() => setParityOpenRecordedToolCalls(o => !o)}
         className="border-white/[0.06] bg-black/20"
       >
+        <p className="mb-4 text-sm text-slate-400">
+          Read-only baseline evidence from the representative snapshot.
+        </p>
         {!snapshotIdForBaselineTimeline ? (
           <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-8 text-center text-sm text-slate-500">
             Select baseline logs on the main screen to load recorded tool activity.
@@ -649,6 +659,43 @@ export function ReleaseGateConfigPanelParityTab({
             rows={baselineToolTimelineRows}
           />
         )}
+      </CollapsiblePanel>
+
+      <CollapsiblePanel
+        title="Raw request JSON"
+        subtitle={isJsonModified ? "Advanced override active" : "No raw JSON override"}
+        open={parityOpenRawJson}
+        onToggle={() => setParityOpenRawJson(o => !o)}
+        className="border-white/[0.06] bg-black/20"
+      >
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="text-sm text-slate-400">
+            Use this only when the structured controls above are not enough. Verify the final
+            payload in Preview.
+          </div>
+          <button
+            type="button"
+            onClick={handleResetJsonToBaseline}
+            disabled={editsLocked || !isJsonModified || !baselinePayload}
+            className="shrink-0 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            <RefreshCcw className="w-3.5 h-3.5" />
+            Reset to baseline
+          </button>
+        </div>
+        <textarea
+          value={candidateJsonValue}
+          disabled={editsLocked}
+          onChange={e => setRequestJsonDraft?.(e.target.value)}
+          onBlur={() => handleRequestJsonBlur?.()}
+          spellCheck={false}
+          className="min-h-[220px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-5 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar resize-y"
+        />
+        {requestJsonError ? (
+          <div className="mt-3 text-xs font-medium text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+            {requestJsonError}
+          </div>
+        ) : null}
       </CollapsiblePanel>
     </>
   );
