@@ -1,9 +1,6 @@
-export type EditableTool = {
-  id: string;
-  name: string;
-  description: string;
-  parameters: string;
-};
+import type { ReleaseGateEditableTool } from "./releaseGatePageContext.types";
+
+export type EditableTool = ReleaseGateEditableTool;
 
 export function extractToolsFromPayload(payload: Record<string, unknown> | null): EditableTool[] {
   if (!payload) return [];
@@ -34,6 +31,7 @@ export function extractToolsFromPayload(payload: Record<string, unknown> | null)
       name,
       description,
       parameters: paramsObj ? JSON.stringify(paramsObj, null, 2) : "{}",
+      baselineSampleSummary: "",
     });
   }
   return out;

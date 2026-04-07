@@ -204,6 +204,15 @@ export interface ReleaseGateAttempt {
     response_extract_path?: string | null;
     response_extract_reason?: string | null;
     tool_calls_summary?: Array<{ name?: string; arguments?: unknown }>;
+    tool_expectations?: Array<{
+      name: string;
+      tool_type: "retrieval" | "action";
+      description?: string | null;
+      result_guide?: string | null;
+      baseline_sample_summary?: string | null;
+      expected_result_fields?: Array<{ name: string; description?: string | null }> | null;
+      expected_action_fields?: Array<{ name: string; description?: string | null }> | null;
+    }> | null;
     request_fallback_stage?: string | null;
     request_fallback_attempts?: string[];
     tool_loop_status?: string | null;
@@ -291,6 +300,15 @@ export interface ReleaseGateReplayRequestMeta {
   sampling_overrides?: Record<string, unknown> | null;
   has_new_system_prompt?: boolean;
   new_system_prompt_preview?: string | null;
+  tool_expectations?: Array<{
+    name: string;
+    tool_type: "retrieval" | "action";
+    description?: string | null;
+    result_guide?: string | null;
+    baseline_sample_summary?: string | null;
+    expected_result_fields?: Array<{ name: string; description?: string | null }> | null;
+    expected_action_fields?: Array<{ name: string; description?: string | null }> | null;
+  }> | null;
 }
 
 export interface ReleaseGateResult {

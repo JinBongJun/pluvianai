@@ -97,6 +97,7 @@ from app.services.user_api_key_service import UserApiKeyService
 from app.services.cache_service import cache_service
 from app.services.release_gate_job_support import merge_result_perf_with_job_summary
 from app.services.release_gate_preflight import resolve_release_gate_provider_context
+from app.utils.tool_expectations import assess_tool_expectations
 from app.services.release_gate_result_assembly import (
     build_release_gate_case_result,
     build_release_gate_final_payload,
@@ -853,12 +854,55 @@ def _build_replay_request_meta(
     per_sid = _sanitize_replay_overrides_by_snapshot_id(
         getattr(payload, "replay_overrides_by_snapshot_id", None)
     )
+    tool_expectations_raw = getattr(payload, "tool_expectations", None)
+    tool_expectations: List[Dict[str, Any]] = []
+    if isinstance(tool_expectations_raw, list):
+        for item in tool_expectations_raw:
+            dumped = item.model_dump(exclude_none=True) if hasattr(item, "model_dump") else item
+            if not isinstance(dumped, dict):
+                continue
+            name = str(dumped.get("name") or "").strip()
+            if not name:
+                continue
+            tool_type = str(dumped.get("tool_type") or "retrieval").strip().lower()
+            if tool_type not in {"retrieval", "action"}:
+                tool_type = "retrieval"
+            normalized: Dict[str, Any] = {
+                "name": name,
+                "tool_type": tool_type,
+                "description": str(dumped.get("description") or "").strip() or None,
+                "result_guide": str(dumped.get("result_guide") or "").strip() or None,
+                "baseline_sample_summary": str(dumped.get("baseline_sample_summary") or "").strip()
+                or None,
+            }
+            for key in ("expected_result_fields", "expected_action_fields"):
+                raw_fields = dumped.get(key)
+                if not isinstance(raw_fields, list):
+                    continue
+                normalized_fields: List[Dict[str, Any]] = []
+                for field in raw_fields:
+                    field_dumped = field.model_dump(exclude_none=True) if hasattr(field, "model_dump") else field
+                    if not isinstance(field_dumped, dict):
+                        continue
+                    field_name = str(field_dumped.get("name") or "").strip()
+                    if not field_name:
+                        continue
+                    normalized_fields.append(
+                        {
+                            "name": field_name,
+                            "description": str(field_dumped.get("description") or "").strip() or None,
+                        }
+                    )
+                if normalized_fields:
+                    normalized[key] = normalized_fields
+            tool_expectations.append(normalized)
     return {
         "replay_overrides_applied": overrides,
         "baseline_snapshot_excerpt": baseline_excerpt,
         "replay_overrides_by_snapshot_id_applied": per_sid,
         "sampling_overrides": sampling or None,
         "has_new_system_prompt": bool(nsp),
+        "tool_expectations": tool_expectations or None,
         "new_system_prompt_preview": (nsp[:240] + "…") if len(nsp) > 240 else (nsp or None),
     }
 
@@ -1217,6 +1261,29 @@ class ToolContextConfig(BaseModel):
     inject: Optional[ToolContextInject] = Field(None, description="Used when mode=inject.")
 
 
+class ReleaseGateToolExpectationField(BaseModel):
+    name: str = Field(..., description="Expected field name.")
+    description: Optional[str] = Field(None, description="Human-readable meaning of the field.")
+
+
+class ReleaseGateToolExpectation(BaseModel):
+    name: str = Field(..., description="Tool name.")
+    tool_type: Literal["retrieval", "action"] = Field(
+        ..., description="retrieval: returns information to the model. action: produces or sends payload/content."
+    )
+    description: Optional[str] = Field(None, description="Tool purpose shown in configuration UI.")
+    result_guide: Optional[str] = Field(None, description="Optional extra guidance for the tool.")
+    baseline_sample_summary: Optional[str] = Field(
+        None, description="Optional baseline sample output summary imported from recorded tool history."
+    )
+    expected_result_fields: Optional[List[ReleaseGateToolExpectationField]] = Field(
+        None, description="Structured fields expected back from retrieval tools."
+    )
+    expected_action_fields: Optional[List[ReleaseGateToolExpectationField]] = Field(
+        None, description="Structured fields expected in action payload/content."
+    )
+
+
 class ReleaseGateValidateRequest(BaseModel):
     agent_id: Optional[str] = Field(
         None, description="Agent (node) to validate. Use with use_recent_snapshots or dataset_id."
@@ -1291,6 +1358,13 @@ class ReleaseGateValidateRequest(BaseModel):
         description=(
             "Optional additional system context for replay (e.g. tool/doc/code not present in captured logs). "
             "When mode=inject, resolved text is appended to the system prompt per snapshot."
+        ),
+    )
+    tool_expectations: Optional[List[ReleaseGateToolExpectation]] = Field(
+        None,
+        description=(
+            "Optional structured expectations for allowed tools. Stored with the run for UI preview and later "
+            "runtime interpretation; not injected into the provider request."
         ),
     )
     rule_ids: Optional[List[str]] = Field(None, description="Optional specific rule IDs")
@@ -2245,6 +2319,11 @@ async def _run_release_gate(
             if payload.tool_context is not None
             else None
         )
+        tool_expectations_payload: Optional[List[Dict[str, Any]]] = (
+            [item.model_dump(exclude_none=True) for item in payload.tool_expectations]
+            if payload.tool_expectations
+            else None
+        )
 
         replay_batches = await _execute_release_gate_replay_batches(
             project_id=project_id,
@@ -2459,6 +2538,11 @@ async def _run_release_gate(
                 tool_grounding_status = str(tool_grounding.get("status") or "").strip().lower()
                 signals_obj["runtime_checks"]["tool_grounding"] = tool_grounding_status
                 signals_obj["runtime_details"]["tool_grounding"] = tool_grounding
+                tool_expectations_detail = assess_tool_expectations(
+                    tool_expectations_payload,
+                    tool_evidence,
+                )
+                signals_obj["runtime_details"]["tool_expectations"] = tool_expectations_detail
                 baseline_seq = _baseline_sequence_for_snapshot(snapshot)
                 candidate_seq = tool_calls_summary_to_sequence(run_tool_summary)
                 behavior_diff = compute_behavior_diff(baseline_seq, candidate_seq).to_dict()
@@ -2548,6 +2632,7 @@ async def _run_release_gate(
                                 "response_extract_path": candidate_extract_path,
                                 "response_extract_reason": candidate_extract_reason,
                                 "tool_calls_summary": run_tool_summary,
+                                "tool_expectations": tool_expectations_payload,
                                 "request_fallback_stage": (
                                     str(res.get("request_fallback_stage") or "").strip() or None
                                 ),
@@ -2637,6 +2722,7 @@ async def _run_release_gate(
                                 "response_extract_path": candidate_extract_path,
                                 "response_extract_reason": candidate_extract_reason,
                                 "tool_calls_summary": run_tool_summary,
+                                "tool_expectations": tool_expectations_payload,
                                 "request_fallback_stage": (
                                     str(res.get("request_fallback_stage") or "").strip() or None
                                 ),
@@ -2747,6 +2833,7 @@ async def _run_release_gate(
                             "response_extract_path": candidate_extract_path,
                             "response_extract_reason": candidate_extract_reason,
                             "tool_calls_summary": run_tool_summary,
+                            "tool_expectations": tool_expectations_payload,
                             "request_fallback_stage": (
                                 str(res.get("request_fallback_stage") or "").strip() or None
                             ),

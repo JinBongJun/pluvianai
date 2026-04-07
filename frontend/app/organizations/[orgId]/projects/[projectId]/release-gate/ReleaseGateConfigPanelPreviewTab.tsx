@@ -25,12 +25,14 @@ export function ReleaseGateConfigPanelPreviewTab({
     finalCandidateJson,
   } = m;
 
-  const toolGuidance = toolsList.filter(tool => (tool.resultGuide ?? "").trim().length > 0);
-  const typedToolGuidance = toolsList.filter(tool => {
+  const toolReviewItems = toolsList.filter(tool => {
     const toolType = tool.toolType ?? "retrieval";
     const expectedFields =
       toolType === "action" ? tool.expectedActionFields ?? [] : tool.expectedResultFields ?? [];
-    return expectedFields.some(field => field.name.trim() || field.description.trim());
+    const hasExpectedFields = expectedFields.some(field => field.name.trim() || field.description.trim());
+    const hasBaselineSample = (tool.baselineSampleSummary ?? "").trim().length > 0;
+    const hasNotes = (tool.resultGuide ?? "").trim().length > 0;
+    return hasExpectedFields || hasBaselineSample || hasNotes;
   });
 
   return (
@@ -157,31 +159,13 @@ export function ReleaseGateConfigPanelPreviewTab({
               call.
             </div>
           ) : null}
-          {toolGuidance.length > 0 ? (
-            <div className="mt-3 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-3 text-xs text-fuchsia-100">
-              <div className="font-bold uppercase tracking-[0.15em] text-fuchsia-300">
-                Tool guidance
-              </div>
-              <div className="mt-2 space-y-2">
-                {toolGuidance.map(tool => (
-                  <div key={tool.id}>
-                    <span className="font-semibold text-fuchsia-200">
-                      {tool.name.trim() || "Unnamed tool"}
-                    </span>
-                    {": "}
-                    <span>{tool.resultGuide?.trim()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {typedToolGuidance.length > 0 ? (
+          {toolReviewItems.length > 0 ? (
             <div className="mt-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-3 text-xs text-cyan-100">
               <div className="font-bold uppercase tracking-[0.15em] text-cyan-300">
-                Tool expectations
+                Tool setup review
               </div>
               <div className="mt-2 space-y-3">
-                {typedToolGuidance.map(tool => {
+                {toolReviewItems.map(tool => {
                   const toolType = tool.toolType ?? "retrieval";
                   const expectedFields =
                     toolType === "action"
@@ -190,24 +174,50 @@ export function ReleaseGateConfigPanelPreviewTab({
                   const visibleFields = expectedFields.filter(
                     field => field.name.trim() || field.description.trim()
                   );
+                  const baselineSampleSummary = tool.baselineSampleSummary?.trim();
+                  const resultGuide = tool.resultGuide?.trim();
                   return (
-                    <div key={tool.id}>
+                    <div
+                      key={tool.id}
+                      className="rounded-xl border border-white/10 bg-black/20 px-3 py-3"
+                    >
                       <div className="font-semibold text-cyan-200">
                         {tool.name.trim() || "Unnamed tool"}{" "}
                         <span className="font-normal text-cyan-100/80">
-                          {toolType === "action" ? "Action payload" : "Returned fields"}
+                          {toolType === "action" ? "Action tool" : "Retrieval tool"}
                         </span>
                       </div>
-                      <div className="mt-1 space-y-1">
-                        {visibleFields.map(field => (
-                          <div key={field.id}>
-                            <span className="font-semibold text-cyan-100">
-                              {field.name.trim() || "Unnamed field"}
-                            </span>
-                            {field.description.trim() ? `: ${field.description.trim()}` : ""}
+                      {visibleFields.length > 0 ? (
+                        <div className="mt-2">
+                          <div className="font-semibold text-cyan-100/85">
+                            {toolType === "action" ? "Action payload" : "Returned fields"}
                           </div>
-                        ))}
-                      </div>
+                          <div className="mt-1 space-y-1">
+                            {visibleFields.map(field => (
+                              <div key={field.id}>
+                                <span className="font-semibold text-cyan-100">
+                                  {field.name.trim() || "Unnamed field"}
+                                </span>
+                                {field.description.trim() ? `: ${field.description.trim()}` : ""}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {baselineSampleSummary ? (
+                        <div className="mt-2 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.08] px-2.5 py-2 text-emerald-100/90">
+                          <div className="mb-1 font-semibold text-emerald-200">Baseline sample</div>
+                          <div className="whitespace-pre-wrap break-words">
+                            {baselineSampleSummary}
+                          </div>
+                        </div>
+                      ) : null}
+                      {resultGuide ? (
+                        <div className="mt-2 text-fuchsia-100/90">
+                          <span className="font-semibold text-fuchsia-200">Extra notes:</span>{" "}
+                          {resultGuide}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
