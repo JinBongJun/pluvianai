@@ -226,14 +226,13 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             1. Candidate run (all selected logs)
           </div>
           <p className="text-sm text-slate-400 leading-relaxed">
-            One candidate per run: the same model, system prompt, sampling, thresholds, and config
-            JSON apply to every selected log. Use Advanced settings only when some logs need
-            different attachments, metadata, or extra system text.
+            These settings apply to every selected log. Use Advanced settings only for tool setup,
+            sampling, extra fields, or extra context.
           </p>
           {repeatRuns > 0 ? (
             <p className="mt-3 text-xs text-slate-500 flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-fuchsia-500/50" />
-              Repeat runs: <strong className="text-slate-300 font-mono">{repeatRuns}×</strong> (from
+              Repeat runs: <strong className="text-slate-300 font-mono">{repeatRuns}x</strong> (from
               the run controls on the main screen)
             </p>
           ) : null}
@@ -244,7 +243,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-              2. Strictness
+              2. Pass rules
             </div>
             <div className="text-base font-semibold text-white">Release Gate Thresholds</div>
           </div>
@@ -342,7 +341,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-              3. Model Settings
+              3. Model
             </div>
             <div className="flex items-center gap-3">
               <div className="text-base font-semibold text-white">
@@ -360,8 +359,8 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                   )}
                   title={
                     pinnedBadge === "Pinned"
-                      ? "Pinned model id (versioned) — best for reproducible gates."
-                      : "Custom model id — may reduce reproducibility."
+                      ? "Pinned model id (versioned), best for reproducible gates."
+                      : "Custom model id; may reduce reproducibility."
                   }
                 >
                   {pinnedBadge}
@@ -579,7 +578,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             <p className="text-xs text-slate-500 mb-3 leading-relaxed">
               Custom models require BYOK. Supported providers: OpenAI, Anthropic, Google. Premium
               models (e.g. GPT-4o, Claude Sonnet, Gemini Pro) are not available as hosted quick
-              picks — enter the provider model id here (for example{" "}
+              picks, so enter the provider model id here (for example{" "}
               <span className="font-mono text-slate-400">gpt-4o-mini</span>), then paste a key or
               use a key you saved from this screen.
             </p>
@@ -641,7 +640,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 onClick={() => void saveRgKeyFromPaste()}
                 className="rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-fuchsia-100 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {rgSaveBusy ? "Saving…" : "Save pasted key to project"}
+                {rgSaveBusy ? "Saving..." : "Save pasted key to project"}
               </button>
               {rgSavedKeysForProvider.length > 0 ? (
                 <ul className="mt-3 space-y-2 border-t border-white/10 pt-3">
@@ -655,7 +654,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                         <span className="font-mono text-[11px] text-slate-400">
                           {(k.name || "Saved key").replace(/^\[RG\]\s*/, "")}
                           {selected ? (
-                            <span className="ml-2 text-fuchsia-300">· in use for this run</span>
+                            <span className="ml-2 text-fuchsia-300">in use for this run</span>
                           ) : null}
                         </span>
                         <span className="flex gap-2">
@@ -676,7 +675,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                             onClick={() => void deleteRgSavedKey(k.id)}
                             className="rounded border border-rose-500/30 px-2 py-1 text-[11px] font-medium text-rose-200 hover:bg-rose-500/10 disabled:opacity-40"
                           >
-                            {rgDeleteBusyId === k.id ? "…" : "Delete"}
+                            {rgDeleteBusyId === k.id ? "Deleting..." : "Delete"}
                           </button>
                         </span>
                       </li>
@@ -768,69 +767,12 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
-        <div className="mb-5">
-          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-            5. Sampling
-          </div>
-          <div className="text-sm text-slate-400">
-            Adjust candidate generation knobs without changing snapshot content.
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <label className="space-y-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-              Temperature
-            </span>
-            <input
-              type="number"
-              min={0}
-              max={2}
-              step={0.1}
-              value={typeof requestBody.temperature === "number" ? requestBody.temperature : ""}
-              onChange={e => updateRequestNumberField("temperature", e.target.value)}
-              disabled={editsLocked}
-              className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-            />
-          </label>
-          <label className="space-y-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-              Max tokens
-            </span>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={typeof requestBody.max_tokens === "number" ? requestBody.max_tokens : ""}
-              onChange={e => updateRequestNumberField("max_tokens", e.target.value)}
-              disabled={editsLocked}
-              className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-            />
-          </label>
-          <label className="space-y-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-              Top p
-            </span>
-            <input
-              type="number"
-              min={0}
-              max={1}
-              step={0.1}
-              value={typeof requestBody.top_p === "number" ? requestBody.top_p : ""}
-              onChange={e => updateRequestNumberField("top_p", e.target.value)}
-              disabled={editsLocked}
-              className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-            />
-          </label>
-        </div>
-      </div>
-
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm flex flex-col">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">
-                6. Config-only JSON
+                5. Request overrides
               </div>
               {isJsonModified && (
                 <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-amber-400 border border-amber-500/20">
@@ -839,10 +781,8 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
               )}
             </div>
             <div className="text-sm text-slate-400">
-              Run-wide JSON merged for every log. Keep tools in Environment parity, edit the main
-              system prompt in the field above, and use Environment parity for attachments or other
-              extra request fields that can differ by log. Technical API name:{" "}
-              <span className="font-mono text-slate-500">replay_overrides</span>.
+              Run-wide JSON merged into every selected log. Use Advanced settings for per-log
+              fields, tool setup, or extra context.
             </div>
           </div>
           <button
@@ -872,3 +812,5 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
     </>
   );
 }
+
+

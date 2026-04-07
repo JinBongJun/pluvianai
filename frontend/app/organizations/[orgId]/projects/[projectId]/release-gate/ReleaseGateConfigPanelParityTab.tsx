@@ -18,6 +18,8 @@ export function ReleaseGateConfigPanelParityTab({
     setParityOpenTools,
     toolsSummarySubtitle,
     editsLocked,
+    requestBody,
+    updateRequestNumberField,
     addTool,
     toolsList,
     updateTool,
@@ -72,27 +74,18 @@ export function ReleaseGateConfigPanelParityTab({
   return (
     <>
       <p className="rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-xs leading-relaxed text-slate-500">
-        Use this tab when replay needs more than the run-wide settings in Core setup. Match the{" "}
-        <strong className="text-slate-400">tools</strong> the model can use, add{" "}
-        <strong className="text-slate-400">extra request fields</strong> such as attachments or
-        metadata, and add optional <strong className="text-slate-400">extra system text</strong>{" "}
-        when the captured log did not keep enough context. Snapshot defaults load when you select
-        logs, and <span className="text-slate-400">Reset</span> restores them. Technical API names:{" "}
-        <span className="font-mono text-slate-600">replay_overrides</span> /{" "}
-        <span className="font-mono text-slate-600">replay_overrides_by_snapshot_id</span>.
+        Use this tab only when replay needs more than the run-wide setup from Core.
       </p>
 
       <CollapsiblePanel
-        title="Tools (definitions + recorded calls)"
+        title="Tool setup"
         subtitle={toolsSummarySubtitle}
         open={parityOpenTools}
         onToggle={() => setParityOpenTools(o => !o)}
       >
         <p className="mb-4 text-sm text-slate-400">
-          Definitions decide which tools the model is allowed to call during replay for every
-          selected log. The recorded calls below are a read-only example from one baseline log so
-          you can mirror production behavior. Editing here changes the available tool definitions
-          only.
+          Define which tools the model can call during replay. Keep these aligned with the
+          baseline unless tool access itself is part of the experiment.
         </p>
         <div className="mb-4 flex flex-wrap justify-end gap-2">
           <button
@@ -193,43 +186,64 @@ export function ReleaseGateConfigPanelParityTab({
             })}
           </div>
         )}
-
-        <div className="mt-6 border-t border-white/10 pt-4">
-          <CollapsiblePanel
-            title="Recorded tool calls"
-            subtitle={recordedCallsSummarySubtitle}
-            open={parityOpenRecordedToolCalls}
-            onToggle={() => setParityOpenRecordedToolCalls(o => !o)}
-            className="border-white/[0.06] bg-black/20"
-          >
-            {!snapshotIdForBaselineTimeline ? (
-              <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-8 text-center text-sm text-slate-500">
-                Select baseline logs on the main screen to load recorded tool activity.
-              </div>
-            ) : baselineTimelineLoading ? (
-              <div className="rounded-xl border border-white/10 bg-[#0a0c10] px-5 py-8 text-center text-sm text-slate-500">
-                Loading tool timeline…
-              </div>
-            ) : baselineToolTimelineRows.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-amber-500/20 bg-amber-500/5 px-5 py-8 text-center text-sm text-slate-400">
-                No tool I/O captured for this snapshot. Instrument your app or upgrade the SDK to
-                send <span className="font-mono text-slate-300">tool_events</span> on ingest.
-              </div>
-            ) : (
-              <ToolTimelinePanel
-                variant="compact"
-                title="Tool timeline"
-                subtitle={
-                  snapshotIdForBaselineTimeline != null
-                    ? `Representative snapshot #${snapshotIdForBaselineTimeline}`
-                    : undefined
-                }
-                rows={baselineToolTimelineRows}
-              />
-            )}
-          </CollapsiblePanel>
-        </div>
       </CollapsiblePanel>
+
+      <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm">
+        <div className="mb-5">
+          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
+            Sampling
+          </div>
+          <div className="text-sm text-slate-400">
+            Leave these unchanged unless sampling itself is part of the experiment.
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <label className="space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+              Temperature
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={2}
+              step={0.1}
+              value={typeof requestBody.temperature === "number" ? requestBody.temperature : ""}
+              onChange={e => updateRequestNumberField("temperature", e.target.value)}
+              disabled={editsLocked}
+              className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-violet-400/40 focus:ring-1 focus:ring-violet-400/30 transition-all"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+              Max tokens
+            </span>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={typeof requestBody.max_tokens === "number" ? requestBody.max_tokens : ""}
+              onChange={e => updateRequestNumberField("max_tokens", e.target.value)}
+              disabled={editsLocked}
+              className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-violet-400/40 focus:ring-1 focus:ring-violet-400/30 transition-all"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+              Top p
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.1}
+              value={typeof requestBody.top_p === "number" ? requestBody.top_p : ""}
+              onChange={e => updateRequestNumberField("top_p", e.target.value)}
+              disabled={editsLocked}
+              className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-2.5 text-sm font-mono text-slate-200 outline-none focus:border-violet-400/40 focus:ring-1 focus:ring-violet-400/30 transition-all"
+            />
+          </label>
+        </div>
+      </div>
 
       <CollapsiblePanel
         title="Extra request fields"
@@ -318,8 +332,7 @@ export function ReleaseGateConfigPanelParityTab({
                 <p className="text-xs text-slate-500 mt-1 max-w-[48rem]">
                   Only add fields that are different for this log. Matching values are hidden so you
                   do not edit the same thing twice. Empty{" "}
-                  <code className="text-slate-400">{"{}"}</code> means “use the shared fields only.”
-                  Replay still applies shared fields first, then this log&apos;s fields.
+                  <code className="text-slate-400">{"{}"}</code> means use the shared fields only. Replay still applies shared fields first, then this log&apos;s fields.
                 </p>
               </div>
               <button
@@ -524,7 +537,7 @@ export function ReleaseGateConfigPanelParityTab({
                     onChange={e => setToolContextGlobalText?.(e.target.value)}
                     disabled={editsLocked}
                     spellCheck={false}
-                    placeholder="Paste short docs, policy notes, or tool results to include for every selected log…"
+                    placeholder="Paste short docs, policy notes, or tool results to include for every selected log."
                     className="min-h-[180px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-4 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
                   />
                 </label>
@@ -587,7 +600,7 @@ export function ReleaseGateConfigPanelParityTab({
                               }
                               disabled={editsLocked}
                               spellCheck={false}
-                              placeholder="Extra system text for this log…"
+                              placeholder="Extra system text for this log."
                               className="min-h-[120px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-3 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
                             />
                           </div>
@@ -605,6 +618,39 @@ export function ReleaseGateConfigPanelParityTab({
           )}
         </div>
       </CollapsiblePanel>
+      <CollapsiblePanel
+        title="Recorded tool history"
+        subtitle={recordedCallsSummarySubtitle}
+        open={parityOpenRecordedToolCalls}
+        onToggle={() => setParityOpenRecordedToolCalls(o => !o)}
+        className="border-white/[0.06] bg-black/20"
+      >
+        {!snapshotIdForBaselineTimeline ? (
+          <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-8 text-center text-sm text-slate-500">
+            Select baseline logs on the main screen to load recorded tool activity.
+          </div>
+        ) : baselineTimelineLoading ? (
+          <div className="rounded-xl border border-white/10 bg-[#0a0c10] px-5 py-8 text-center text-sm text-slate-500">
+            Loading recorded tool history.
+          </div>
+        ) : baselineToolTimelineRows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-amber-500/20 bg-amber-500/5 px-5 py-8 text-center text-sm text-slate-400">
+            No tool I/O captured for this snapshot. Instrument your app or upgrade the SDK to send <span className="font-mono text-slate-300">tool_events</span> on ingest.
+          </div>
+        ) : (
+          <ToolTimelinePanel
+            variant="compact"
+            title="Tool history"
+            subtitle={
+              snapshotIdForBaselineTimeline != null
+                ? `Representative snapshot #${snapshotIdForBaselineTimeline}`
+                : undefined
+            }
+            rows={baselineToolTimelineRows}
+          />
+        )}
+      </CollapsiblePanel>
     </>
   );
 }
+

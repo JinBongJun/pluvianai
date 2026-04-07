@@ -42,7 +42,7 @@ export function useReleaseGateConfigPanelParityTabModel(
   const { snapshotIdForBaselineTimeline, baselineTimelineLoading, baselineToolTimelineRows } =
     timeline;
 
-  const [parityOpenTools, setParityOpenTools] = useState(false);
+  const [parityOpenTools, setParityOpenTools] = useState(true);
   const [parityOpenOverrides, setParityOpenOverrides] = useState(false);
   const [parityOpenContext, setParityOpenContext] = useState(false);
   const [parityOpenRecordedToolCalls, setParityOpenRecordedToolCalls] = useState(false);
@@ -167,7 +167,7 @@ export function useReleaseGateConfigPanelParityTabModel(
         label: "Tools",
         value:
           toolsList.length > 0 && baselineToolTimelineRows.length > 0
-            ? `${toolsList.length} defined · ${baselineToolTimelineRows.length} recorded I/O`
+            ? `${toolsList.length} defined, ${baselineToolTimelineRows.length} recorded event${baselineToolTimelineRows.length === 1 ? "" : "s"}`
             : toolsList.length > 0
               ? `${toolsList.length} defined`
               : baselineToolTimelineRows.length > 0
@@ -204,9 +204,9 @@ export function useReleaseGateConfigPanelParityTabModel(
     toolsList.length === 0 && baselineToolTimelineRows.length === 0
       ? "No tools in this run"
       : toolsList.length === 0
-        ? `${baselineToolTimelineRows.length} recorded call(s) — add definitions above to replay with tools`
+        ? `${baselineToolTimelineRows.length} recorded event${baselineToolTimelineRows.length === 1 ? "" : "s"}; add definitions above to replay with tools`
         : baselineToolTimelineRows.length > 0
-          ? `${toolsList.length} definition(s) · ${baselineToolTimelineRows.length} recorded I/O`
+          ? `${toolsList.length} definition${toolsList.length === 1 ? "" : "s"}, ${baselineToolTimelineRows.length} recorded event${baselineToolTimelineRows.length === 1 ? "" : "s"}`
           : `${toolsList.length} tool definition(s)`;
   const overridesSummarySubtitle = hasAnyBodyOverridesContent
     ? perLogOverridesCount > 0
@@ -222,7 +222,7 @@ export function useReleaseGateConfigPanelParityTabModel(
   const timelineSummarySubtitle = !snapshotIdForBaselineTimeline
     ? "Select a baseline snapshot on the main screen"
     : baselineTimelineLoading
-      ? "Loading…"
+      ? "Loading recorded tool history"
       : baselineToolTimelineRows.length > 0
         ? `${baselineToolTimelineRows.length} recorded events`
         : "No tool I/O captured for this snapshot";
@@ -290,3 +290,4 @@ export function useReleaseGateConfigPanelParityTabModel(
 export type ReleaseGateConfigPanelParityTabModel = ReturnType<
   typeof useReleaseGateConfigPanelParityTabModel
 >;
+
