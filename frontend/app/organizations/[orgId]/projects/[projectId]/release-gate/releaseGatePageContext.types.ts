@@ -16,6 +16,9 @@ export type ReleaseGateEditableTool = {
   name: string;
   description: string;
   parameters: string;
+  toolType?: "retrieval" | "action";
+  expectedResultFields?: Array<{ id: string; name: string; description: string }>;
+  expectedActionFields?: Array<{ id: string; name: string; description: string }>;
   resultGuide?: string;
 };
 

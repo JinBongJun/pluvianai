@@ -26,6 +26,12 @@ export function ReleaseGateConfigPanelPreviewTab({
   } = m;
 
   const toolGuidance = toolsList.filter(tool => (tool.resultGuide ?? "").trim().length > 0);
+  const typedToolGuidance = toolsList.filter(tool => {
+    const toolType = tool.toolType ?? "retrieval";
+    const expectedFields =
+      toolType === "action" ? tool.expectedActionFields ?? [] : tool.expectedResultFields ?? [];
+    return expectedFields.some(field => field.name.trim() || field.description.trim());
+  });
 
   return (
     <div className="rounded-2xl border border-white/5 bg-[#0f1115] overflow-hidden flex flex-col shadow-inner">
@@ -166,6 +172,45 @@ export function ReleaseGateConfigPanelPreviewTab({
                     <span>{tool.resultGuide?.trim()}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          ) : null}
+          {typedToolGuidance.length > 0 ? (
+            <div className="mt-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-3 text-xs text-cyan-100">
+              <div className="font-bold uppercase tracking-[0.15em] text-cyan-300">
+                Tool expectations
+              </div>
+              <div className="mt-2 space-y-3">
+                {typedToolGuidance.map(tool => {
+                  const toolType = tool.toolType ?? "retrieval";
+                  const expectedFields =
+                    toolType === "action"
+                      ? tool.expectedActionFields ?? []
+                      : tool.expectedResultFields ?? [];
+                  const visibleFields = expectedFields.filter(
+                    field => field.name.trim() || field.description.trim()
+                  );
+                  return (
+                    <div key={tool.id}>
+                      <div className="font-semibold text-cyan-200">
+                        {tool.name.trim() || "Unnamed tool"}{" "}
+                        <span className="font-normal text-cyan-100/80">
+                          {toolType === "action" ? "(action)" : "(retrieval)"}
+                        </span>
+                      </div>
+                      <div className="mt-1 space-y-1">
+                        {visibleFields.map(field => (
+                          <div key={field.id}>
+                            <span className="font-semibold text-cyan-100">
+                              {field.name.trim() || "Unnamed field"}
+                            </span>
+                            {field.description.trim() ? `: ${field.description.trim()}` : ""}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : null}
