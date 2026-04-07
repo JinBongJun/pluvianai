@@ -150,8 +150,8 @@ export function ReleaseGateConfigPanelParityTab({
         onToggle={() => setParityOpenTools(o => !o)}
       >
         <p className="mb-4 text-sm text-slate-400">
-          Baseline tools and recorded samples appear here automatically when captured. You can
-          still edit the candidate setup.
+          Captured baseline tools appear here automatically. Edit them only if the candidate run
+          should behave differently.
         </p>
         <div className="mb-4 flex flex-wrap justify-end gap-2">
           <button
@@ -161,7 +161,7 @@ export function ReleaseGateConfigPanelParityTab({
             className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
-            Add retrieval tool
+            Add info tool
           </button>
           <button
             type="button"
@@ -194,7 +194,7 @@ export function ReleaseGateConfigPanelParityTab({
                       <span className="bg-white/10 text-slate-300 w-5 h-5 rounded flex items-center justify-center text-xs">
                         {index + 1}
                       </span>
-                      {toolType === "action" ? "Action tool" : "Retrieval tool"}
+                      {toolType === "action" ? "Action tool" : "Info tool"}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -237,13 +237,17 @@ export function ReleaseGateConfigPanelParityTab({
                     </label>
                     <label className="space-y-2">
                       <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                        What it does
+                        What this tool is for
                       </span>
                       <input
                         value={tool.description}
                         onChange={e => updateTool(tool.id, { description: e.target.value })}
                         disabled={editsLocked}
-                        placeholder="What this tool does"
+                        placeholder={
+                          toolType === "action"
+                            ? "Example: Draft an email or send a Slack update"
+                            : "Example: Look up refund policy or return the latest weather"
+                        }
                         className="w-full rounded-xl border border-white/10 bg-[#0f1115] px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
                       />
                     </label>
@@ -272,6 +276,9 @@ export function ReleaseGateConfigPanelParityTab({
                         <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-300/90">
                           Baseline sample
                         </div>
+                        <div className="mt-1 text-[11px] text-emerald-200/70">
+                          Reference only. This is what the baseline captured.
+                        </div>
                         <div className="mt-2 text-xs leading-relaxed text-emerald-100/90 whitespace-pre-wrap break-words">
                           {tool.baselineSampleSummary.trim()}
                         </div>
@@ -286,8 +293,8 @@ export function ReleaseGateConfigPanelParityTab({
                           </div>
                           <div className="mt-1 text-xs text-slate-500">
                             {toolType === "action"
-                              ? "List what this tool should produce or send."
-                              : "List what should come back to the model."}
+                              ? "List the fields this tool should send or create."
+                              : "List the fields this tool should return."}
                           </div>
                         </div>
                         <button
@@ -372,7 +379,7 @@ export function ReleaseGateConfigPanelParityTab({
 
                       <label className="block space-y-2">
                         <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                          Extra notes (optional)
+                          Optional notes
                         </span>
                       <textarea
                         value={tool.resultGuide ?? ""}
@@ -381,10 +388,10 @@ export function ReleaseGateConfigPanelParityTab({
                         spellCheck={false}
                         placeholder={
                           toolType === "action"
-                            ? "Add any extra notes about the payload or content this tool should produce."
-                            : "Add any extra notes about the information this tool should return."
+                            ? "Add any extra guidance for this action."
+                            : "Add any extra guidance for this tool."
                         }
-                        className="min-h-[88px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
+                        className="min-h-[72px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
                       />
                     </label>
 
