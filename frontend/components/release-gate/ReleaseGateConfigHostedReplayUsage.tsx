@@ -19,18 +19,18 @@ export function ReleaseGateConfigHostedReplayUsage() {
   return (
     <div
       className={clsx(
-        "shrink-0 rounded-xl border px-3 py-2 text-right",
+        "shrink-0 rounded-xl border px-3 py-2 text-right opacity-80",
         metrics.replayExhausted
           ? "border-amber-500/40 bg-amber-500/10"
           : metrics.replayNearLimit
             ? "border-amber-500/25 bg-amber-500/5"
-            : "border-white/10 bg-white/[0.03]"
+            : "border-white/8 bg-white/[0.02]"
       )}
     >
-      <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+      <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500/90">
         Release Gate usage (this month)
       </div>
-      <div className="mt-0.5 font-mono text-xs text-slate-200">
+      <div className="mt-0.5 font-mono text-[11px] text-slate-300">
         {metrics.replayUsed}/{formatUsageLimit(metrics.replayLimit)}
         {metrics.replayExhausted ? (
           <Link

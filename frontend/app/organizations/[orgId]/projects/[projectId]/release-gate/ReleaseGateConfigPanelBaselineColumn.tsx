@@ -26,7 +26,7 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
   } = m;
 
   return (
-    <section className="space-y-6 xl:sticky xl:top-0 xl:self-start">
+    <section className="space-y-4 xl:sticky xl:top-0 xl:self-start">
       <div className="rounded-2xl border border-white/5 bg-[#0f1115] overflow-hidden flex flex-col shadow-inner">
         <div className="flex items-center justify-between border-b border-white/5 px-5 py-4 bg-white/[0.02]">
           <div>
@@ -89,16 +89,15 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
               </select>
             )}
             <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
-              Defaults to the newest selected log. Change this only if you want a different baseline preview.
+              Defaults to the newest selected log.
             </p>
           </div>
         ) : null}
 
         <div className="p-5 flex flex-col">
           {selectedBaselineCount > 1 && representativeBaselineId ? (
-            <div className="mb-4 rounded-xl border border-sky-500/15 bg-sky-500/10 px-4 py-3 text-xs text-sky-100">
-              Previewing baseline for log #{representativeBaselineId}. Candidate settings apply to every selected
-              log.
+            <div className="mb-3 rounded-xl border border-sky-500/15 bg-sky-500/10 px-4 py-2.5 text-xs text-sky-100">
+              Previewing log #{representativeBaselineId}. Candidate settings still apply to every selected log.
             </div>
           ) : null}
           {baselineConfigSummary && (
@@ -190,9 +189,7 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
           </div>
           <div className="mb-3 flex items-center justify-between">
             <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
-              {selectedBaselineCount > 1
-                ? "Representative Baseline Request (Preview)"
-                : "Baseline Request (Preview)"}
+              {selectedBaselineCount > 1 ? "Representative baseline preview" : "Baseline request preview"}
             </div>
             {selectedBaselineCount > 0 && (
               <button
@@ -206,12 +203,12 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
           </div>
 
           {runDataPrompt ? (
-            <pre className="min-h-[120px] max-h-[220px] rounded-xl border border-white/5 bg-[#0a0c10] p-4 text-[12px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
+            <pre className="min-h-[96px] max-h-[168px] rounded-xl border border-white/5 bg-[#0a0c10] p-4 text-[12px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-all overflow-auto custom-scrollbar shadow-inner">
               {runDataPrompt}
             </pre>
           ) : (
-            <div className="min-h-[140px] rounded-xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center gap-3 text-center p-6">
-              <SearchCode className="w-8 h-8 text-slate-600" />
+            <div className="min-h-[112px] rounded-xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center gap-3 text-center p-5">
+              <SearchCode className="w-7 h-7 text-slate-600" />
               <div>
                 <div className="text-sm font-semibold text-slate-300 mb-1">No system prompt available</div>
                 <p className="text-xs text-slate-500 max-w-[260px]">
