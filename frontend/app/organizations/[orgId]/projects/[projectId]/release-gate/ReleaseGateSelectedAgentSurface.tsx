@@ -216,44 +216,44 @@ export function ReleaseGateSelectedAgentSurface({
           </button>
         </div>
 
-        {(startBlockedReason || runError) && (
-          <div className="shrink-0 border-b border-white/[0.06] px-5 py-3">
-            <div
-              className={clsx(
-                "rounded-2xl border px-4 py-3",
-                runError
-                  ? "border-rose-500/40 bg-rose-500/[0.08] text-rose-100"
-                  : "border-amber-500/40 bg-amber-500/[0.08] text-amber-100"
-              )}
-            >
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-current/75">
-                {runError ? "Run error" : rgConfig.isValidating ? "Run in progress" : "Action needed"}
-              </div>
-              <div className="mt-1 text-[13px] font-medium leading-relaxed">
-                {runError || startBlockedReason}
-              </div>
-              {!runError && rgConfig.keyIssueBlocked ? (
-                <div className="mt-1 text-[12px] leading-relaxed text-current/80">
-                  Open Live View, select the node, then add the key in Settings {">"} API Keys.
-                </div>
-              ) : null}
-            </div>
-          </div>
-        )}
-
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-5 custom-scrollbar">
             <div className="rounded-[22px] border border-white/[0.08] bg-white/[0.02] p-5">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
                 Run Experiment
               </p>
-              <h3 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+              <h3 className="mt-2 text-xl font-semibold tracking-tight text-white">
                 Run this setup against selected production snapshots.
               </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-400">
+              <p className="mt-1.5 text-[13px] leading-6 text-slate-400">
                 Review the setup below, then run the experiment.
               </p>
             </div>
+
+            {(startBlockedReason || runError) && (
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                <div
+                  className={clsx(
+                    "rounded-xl border px-3.5 py-2.5",
+                    runError
+                      ? "border-rose-500/35 bg-rose-500/[0.07] text-rose-100"
+                      : "border-amber-500/35 bg-amber-500/[0.07] text-amber-100"
+                  )}
+                >
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-current/75">
+                    {runError ? "Run error" : rgConfig.isValidating ? "Run in progress" : "Action needed"}
+                  </div>
+                  <div className="mt-1 text-[12px] font-medium leading-6">
+                    {runError || startBlockedReason}
+                  </div>
+                  {!runError && rgConfig.keyIssueBlocked ? (
+                    <div className="mt-1 text-[11px] leading-5 text-current/75">
+                      Open Live View, select the node, then add the key in Settings {">"} API Keys.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
 
             <div className="overflow-hidden rounded-[20px] border border-white/[0.08] bg-white/[0.02]">
               <div className="flex items-start gap-3 px-4 py-3">
