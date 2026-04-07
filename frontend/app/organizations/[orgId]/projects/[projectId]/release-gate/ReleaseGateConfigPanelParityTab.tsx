@@ -69,7 +69,6 @@ export function ReleaseGateConfigPanelParityTab({
     snapshotIdForBaselineTimeline,
     baselineTimelineLoading,
     baselineToolTimelineRows,
-    resetParityToolsToBaseline,
     resetParitySharedOverridesToBaseline,
     resetParityPerLogOverridesToBaseline,
     resetParityToolContextToBaseline,
@@ -131,18 +130,10 @@ export function ReleaseGateConfigPanelParityTab({
         onToggle={() => setParityOpenTools(o => !o)}
       >
         <p className="mb-4 text-sm text-slate-400">
-          These are the tools the model can call during replay.
+          Baseline tools appear here automatically when captured. You can still edit them for the
+          candidate run.
         </p>
         <div className="mb-4 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => resetParityToolsToBaseline?.()}
-            disabled={editsLocked || selectedSnapshotIdsForRun.length === 0}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-          >
-            <RefreshCcw className="w-3.5 h-3.5" />
-            Use baseline tool setup
-          </button>
           <button
             type="button"
             onClick={() => importBaselineToolSamples?.()}
@@ -174,7 +165,8 @@ export function ReleaseGateConfigPanelParityTab({
 
         {toolsList.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-8 text-center text-sm text-slate-500">
-            No tools are configured for replay.
+            No baseline tools were captured. Add tools only if the candidate run should allow
+            them.
           </div>
         ) : (
           <div className="space-y-4">

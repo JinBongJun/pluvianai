@@ -3,6 +3,7 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
 
 import type { ReleaseGateConfigPanelContextSlice } from "./releaseGateConfigPanelContextPick";
+import { extractToolsFromTimelineRows } from "./releaseGateEditableTools";
 import { formatSnapshotShortLabel } from "./releaseGatePageContent.lib";
 import type { LiveViewToolTimelineRow } from "@/lib/api/live-view";
 import type { ReleaseGateEditableTool } from "./releaseGatePageContext.types";
@@ -253,6 +254,16 @@ export function useReleaseGateConfigPanelParityTabModel(
         : "No tool I/O captured for this snapshot";
 
   const bodyOverridesJsonValue = bodyOverridesJsonDraft ?? c.requestBodyOverridesJson;
+
+  React.useEffect(() => {
+    if (editsLocked) return;
+    if (!setToolsList) return;
+    if (toolsList.length > 0) return;
+    if (baselineToolTimelineRows.length === 0) return;
+    const inferredTools = extractToolsFromTimelineRows(baselineToolTimelineRows);
+    if (inferredTools.length === 0) return;
+    setToolsList(prev => (prev.length > 0 ? prev : inferredTools));
+  }, [editsLocked, setToolsList, toolsList.length, baselineToolTimelineRows]);
 
   const updateTool = (toolId: string, patch: Partial<EditableTool>) => {
     if (editsLocked) return;
