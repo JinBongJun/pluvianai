@@ -1,4 +1,5 @@
 import type { ReleaseGateEditableTool } from "./releaseGatePageContext.types";
+import type { LiveViewToolTimelineRow } from "@/lib/api/live-view";
 
 export type EditableTool = ReleaseGateEditableTool;
 
@@ -31,6 +32,32 @@ export function extractToolsFromPayload(payload: Record<string, unknown> | null)
       name,
       description,
       parameters: paramsObj ? JSON.stringify(paramsObj, null, 2) : "{}",
+      baselineSampleSummary: "",
+    });
+  }
+  return out;
+}
+
+export function extractToolsFromTimelineRows(rows: LiveViewToolTimelineRow[]): EditableTool[] {
+  const seen = new Set<string>();
+  const out: EditableTool[] = [];
+  for (const row of rows) {
+    const stepType = String(row.step_type || "").trim().toLowerCase();
+    if (stepType !== "tool_call" && stepType !== "tool_result") continue;
+    const name = String(row.tool_name || "").trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: crypto.randomUUID(),
+      name,
+      description: "",
+      parameters: '{\n  "type": "object",\n  "properties": {}\n}',
+      toolType: "retrieval",
+      expectedResultFields: [],
+      expectedActionFields: [],
+      resultGuide: "",
       baselineSampleSummary: "",
     });
   }
