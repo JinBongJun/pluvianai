@@ -134,6 +134,11 @@ export function ReleaseGateSelectedAgentSurface({
     : Array.isArray(resolvedDetails.activeChecks)
       ? resolvedDetails.activeChecks.length
       : 0;
+  const blockedHeading = runError
+    ? "Run error"
+    : rgConfig.isValidating
+      ? "Run in progress"
+      : "Run blocked";
 
   const handleStartClick = () => {
     const isDisabled = !rgConfig.canRunValidate || runLocked || selectedBaselineCount === 0;
@@ -225,7 +230,7 @@ export function ReleaseGateSelectedAgentSurface({
                 >
                   <div className="text-[11px] font-medium leading-5">
                     <span className="font-semibold uppercase tracking-[0.14em] text-current/75">
-                      {runError ? "Run error" : rgConfig.isValidating ? "Run in progress" : "Action needed"}
+                      {blockedHeading}
                     </span>
                     <span className="px-2 text-current/40">·</span>
                     <span>{runError || startBlockedReason}</span>
@@ -253,7 +258,11 @@ export function ReleaseGateSelectedAgentSurface({
                       ? `${selectedBaselineCount} ${selectedBaselineCount === 1 ? "input" : "inputs"} selected`
                       : "No inputs selected"}
                   </div>
-                  <p className="mt-1 text-sm leading-6 text-slate-400">{baselineSummaryText}</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    {selectedBaselineCount > 0
+                      ? baselineSummaryText
+                      : "Choose inputs from Live snapshots or Saved sets."}
+                  </p>
                 </div>
               </div>
 
@@ -321,25 +330,30 @@ export function ReleaseGateSelectedAgentSurface({
           <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
             <span className="min-w-0 text-sm font-medium leading-snug text-white/60">{baselineSummaryText}</span>
             {lastRunStatusLabel ? (
-              <span
-                className={clsx(
-                  "w-fit shrink-0 rounded-lg border px-2.5 py-1 text-xs font-bold uppercase tracking-wider",
-                  (lastRunStatusLabel === "Healthy" || lastRunStatusLabel === "Passed") &&
-                    "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-                  (lastRunStatusLabel === "Flagged" ||
-                    lastRunStatusLabel === "Failed" ||
-                    lastRunStatusLabel === "Canceling") &&
-                    "border-rose-500/30 bg-rose-500/10 text-rose-300",
-                  lastRunStatusLabel === "Running" &&
-                    "border-indigo-500/30 bg-indigo-500/10 text-indigo-300",
-                  !["Healthy", "Flagged", "Passed", "Failed", "Running", "Canceling"].includes(
-                    lastRunStatusLabel
-                  ) && "border-white/10 bg-white/5 text-white/60"
-                )}
-              >
-                {lastRunStatusLabel}
-                {rgConfig.lastRunWallMs ? ` (${(rgConfig.lastRunWallMs / 1000).toFixed(1)}s)` : ""}
-              </span>
+              <div className="flex items-center gap-2 text-xs text-white/55">
+                <span className="uppercase tracking-[0.14em] text-white/35">Last result</span>
+                <span
+                  className={clsx(
+                    "w-fit shrink-0 rounded-lg border px-2.5 py-1 text-xs font-bold uppercase tracking-wider",
+                    (lastRunStatusLabel === "Healthy" || lastRunStatusLabel === "Passed") &&
+                      "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                    (lastRunStatusLabel === "Flagged" ||
+                      lastRunStatusLabel === "Failed" ||
+                      lastRunStatusLabel === "Canceling") &&
+                      "border-rose-500/30 bg-rose-500/10 text-rose-300",
+                    lastRunStatusLabel === "Running" &&
+                      "border-indigo-500/30 bg-indigo-500/10 text-indigo-300",
+                    !["Healthy", "Flagged", "Passed", "Failed", "Running", "Canceling"].includes(
+                      lastRunStatusLabel
+                    ) && "border-white/10 bg-white/5 text-white/60"
+                  )}
+                >
+                  {lastRunStatusLabel}
+                  {rgConfig.lastRunWallMs
+                    ? ` (${(rgConfig.lastRunWallMs / 1000).toFixed(1)}s)`
+                    : ""}
+                </span>
+              </div>
             ) : null}
           </div>
 
