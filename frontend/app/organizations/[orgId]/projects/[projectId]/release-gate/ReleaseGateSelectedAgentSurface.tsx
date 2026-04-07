@@ -134,9 +134,6 @@ export function ReleaseGateSelectedAgentSurface({
     : Array.isArray(resolvedDetails.activeChecks)
       ? resolvedDetails.activeChecks.length
       : 0;
-  const policyChecksCount = Array.isArray(resolvedDetails.policyCheckCards)
-    ? resolvedDetails.policyCheckCards.length
-    : 0;
 
   const handleStartClick = () => {
     const isDisabled = !rgConfig.canRunValidate || runLocked || selectedBaselineCount === 0;
@@ -181,20 +178,6 @@ export function ReleaseGateSelectedAgentSurface({
                 <h2 className="mt-1 truncate text-lg font-semibold tracking-tight text-white">
                   {agentLabel}
                 </h2>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-1.5">
-              <div className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5">
-                <Box className="h-2.5 w-2.5 text-slate-500" />
-                <span className="max-w-[120px] truncate text-[10px] font-medium text-slate-300">
-                  {displayModel}
-                </span>
-              </div>
-              <div className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5">
-                <Wrench className="h-2.5 w-2.5 text-slate-500" />
-                <span className="text-[10px] font-medium text-slate-300">
-                  Configured tools: {toolsCount}
-                </span>
               </div>
             </div>
           </div>
@@ -311,15 +294,15 @@ export function ReleaseGateSelectedAgentSurface({
                       Checks
                     </div>
                     <div className="mt-1 text-sm font-semibold text-white">
-                      {checksCount + policyChecksCount > 0
-                        ? `${checksCount + policyChecksCount} active`
+                      {checksCount > 0
+                        ? `${checksCount} active`
                         : "No checks configured"}
                     </div>
                     {checksPreview.length > 0 ? (
                       <p className="mt-1 text-sm leading-6 text-slate-400">
                         {checksPreview.slice(0, 3).join(", ")}
-                        {checksCount + policyChecksCount > 3
-                          ? `, +${checksCount + policyChecksCount - 3} more`
+                        {checksCount > 3
+                          ? `, +${checksCount - 3} more`
                           : ""}
                       </p>
                     ) : (
