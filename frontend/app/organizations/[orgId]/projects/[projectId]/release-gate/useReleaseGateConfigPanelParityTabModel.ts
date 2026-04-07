@@ -232,7 +232,7 @@ export function useReleaseGateConfigPanelParityTabModel(
     setToolsList(prev => prev.map(tool => (tool.id === toolId ? { ...tool, ...patch } : tool)));
   };
 
-  const addTool = () => {
+  const addTool = (toolType: "retrieval" | "action" = "retrieval") => {
     if (editsLocked) return;
     if (!setToolsList) return;
     setToolsList(prev => [
@@ -241,10 +241,12 @@ export function useReleaseGateConfigPanelParityTabModel(
         id: crypto.randomUUID(),
         name: "",
         description: "",
-        toolType: "retrieval",
+        toolType,
         parameters: '{\n  "type": "object",\n  "properties": {}\n}',
-        expectedResultFields: [{ id: crypto.randomUUID(), name: "", description: "" }],
-        expectedActionFields: [],
+        expectedResultFields:
+          toolType === "retrieval" ? [{ id: crypto.randomUUID(), name: "", description: "" }] : [],
+        expectedActionFields:
+          toolType === "action" ? [{ id: crypto.randomUUID(), name: "", description: "" }] : [],
         resultGuide: "",
       },
     ]);
