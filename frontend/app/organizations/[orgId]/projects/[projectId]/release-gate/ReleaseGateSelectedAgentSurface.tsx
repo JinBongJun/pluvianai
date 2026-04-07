@@ -190,7 +190,7 @@ export function ReleaseGateSelectedAgentSurface({
               <div className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5">
                 <Wrench className="h-2.5 w-2.5 text-slate-500" />
                 <span className="text-[10px] font-medium text-slate-300">
-                  {toolsCount} tool{toolsCount === 1 ? "" : "s"}
+                  Configured tools: {toolsCount}
                 </span>
               </div>
             </div>
@@ -286,7 +286,7 @@ export function ReleaseGateSelectedAgentSurface({
                     <p className="mt-1 text-sm leading-6 text-slate-400">
                       {providerLabel}
                       <span className="px-1.5 text-white/25">·</span>
-                      {toolsCount} tools
+                      Configured tools: {toolsCount}
                       {configSourceLabel ? (
                         <>
                           <span className="px-1.5 text-white/25">·</span>
