@@ -78,6 +78,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
   const detectedMode = modelSource === "detected";
   const hostedMode = modelSource === "hosted";
   const customMode = modelSource === "custom";
+  const normalizedThresholds = normalizeGateThresholds(failRateMax, flakyRateMax);
 
   const selectModelSource = (next: typeof modelSource) => {
     if (editsLocked) return;
@@ -211,30 +212,16 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
 
   return (
     <>
-      <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-5 py-4 text-sm text-fuchsia-200 font-medium">
-        {detectedMode
-          ? "Detected: use the provider and model captured from the selected baseline logs."
-          : hostedMode
-            ? "Hosted: use PluvianAI hosted quick-pick models with included platform credits."
-            : "Custom (BYOK): choose a provider, enter a model id, paste an API key for one run, or save it below for reuse. Live View node keys apply to Detected mode only."}
-      </div>
-
-      <div className="rounded-2xl border border-fuchsia-500/25 bg-[#0a0c10] p-6 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-fuchsia-500/50 to-fuchsia-500/10" />
-        <div className="pl-2">
-          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-fuchsia-300/90 mb-2">
-            1. Candidate run (all selected logs)
-          </div>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            These settings apply to every selected log. Use Advanced settings only for tool setup,
-            sampling, extra fields, or extra context.
-          </p>
+      <div className="rounded-xl border border-white/6 bg-white/[0.02] px-5 py-3 text-sm text-slate-300">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span>These settings apply to every selected log.</span>
+          <span className="text-slate-500">
+            Use Advanced settings for tools, sampling, extra fields, or extra context.
+          </span>
           {repeatRuns > 0 ? (
-            <p className="mt-3 text-xs text-slate-500 flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-fuchsia-500/50" />
-              Repeat runs: <strong className="text-slate-300 font-mono">{repeatRuns}x</strong> (from
-              the run controls on the main screen)
-            </p>
+            <span className="text-slate-500">
+              Repeat runs: <strong className="font-mono text-slate-300">{repeatRuns}x</strong>
+            </span>
           ) : null}
         </div>
       </div>
@@ -243,105 +230,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-              2. Pass rules
-            </div>
-            <div className="text-base font-semibold text-white">Release Gate Thresholds</div>
-          </div>
-          <div className="text-right text-xs text-slate-400">
-            <div>
-              Fail max:{" "}
-              <span className="text-slate-200 font-medium">{Math.round(failRateMax * 100)}%</span>
-            </div>
-            <div>
-              Flaky max:{" "}
-              <span className="text-slate-200 font-medium">{Math.round(flakyRateMax * 100)}%</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {(
-            Object.keys(REPLAY_THRESHOLD_PRESETS) as Array<keyof typeof REPLAY_THRESHOLD_PRESETS>
-          ).map(key => {
-            const preset = REPLAY_THRESHOLD_PRESETS[key];
-            return (
-              <button
-                key={key}
-                type="button"
-                disabled={editsLocked}
-                onClick={() => {
-                  setThresholdPreset?.(key as ReleaseGateConfigThresholdPreset);
-                  if (key !== "custom" && normalizeGateThresholds) {
-                    const normalized = normalizeGateThresholds(
-                      preset.failRateMax,
-                      preset.flakyRateMax
-                    );
-                    setFailRateMax?.(normalized.failRateMax);
-                    setFlakyRateMax?.(normalized.flakyRateMax);
-                  }
-                }}
-                className={clsx(
-                  "rounded-xl border px-3.5 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-all disabled:cursor-not-allowed disabled:opacity-40",
-                  thresholdPreset === key
-                    ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-100 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
-                    : "border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20 hover:bg-white/[0.06]"
-                )}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {thresholdPreset === "custom" && (
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/5 pt-4">
-            <label className="space-y-2">
-              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block">
-                Fail %
-              </span>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                value={Number.isFinite(failRateMax) ? Math.round(failRateMax * 100) : 0}
-                disabled={editsLocked}
-                onChange={e => {
-                  const next = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                  setThresholdPreset?.("custom");
-                  setFailRateMax?.(next / 100);
-                }}
-                className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-3.5 py-2 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 block">
-                Flaky %
-              </span>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                value={Number.isFinite(flakyRateMax) ? Math.round(flakyRateMax * 100) : 0}
-                disabled={editsLocked}
-                onChange={e => {
-                  const next = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                  setThresholdPreset?.("custom");
-                  setFlakyRateMax?.(next / 100);
-                }}
-                className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-3.5 py-2 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-              />
-            </label>
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 shadow-sm">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
-              3. Model
+              1. Model
             </div>
             <div className="flex items-center gap-3">
               <div className="text-base font-semibold text-white">
@@ -354,8 +243,8 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                   className={clsx(
                     "rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em]",
                     pinnedBadge === "Pinned"
-                      ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
-                      : "bg-amber-500/15 text-amber-300 border border-amber-500/20"
+                      ? "border border-emerald-500/20 bg-emerald-500/15 text-emerald-300"
+                      : "border border-amber-500/20 bg-amber-500/15 text-amber-300"
                   )}
                   title={
                     pinnedBadge === "Pinned"
@@ -481,7 +370,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
 
         {detectedMode && (
           <div className="space-y-3 rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-300">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
                   Detected provider
@@ -496,38 +385,6 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                   {runDataModel || "Not detected"}
                 </div>
               </div>
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
-                  API key status
-                </div>
-                <div
-                  className={clsx(
-                    "mt-1 font-medium",
-                    !keyRegistrationMessage
-                      ? "text-slate-300"
-                      : keyIssueBlocked
-                        ? "text-rose-300"
-                        : "text-emerald-300"
-                  )}
-                >
-                  {keyStatusLabel}
-                </div>
-              </div>
-            </div>
-            <div
-              className={clsx(
-                "rounded-xl border px-4 py-3 text-xs leading-relaxed",
-                keyStatusToneClasses
-              )}
-            >
-              {keyStatusText}
-              {missingProviderKeyDetails.length > 0 ? (
-                <ul className="mt-2 list-disc pl-5">
-                  {missingProviderKeyDetails.map(detail => (
-                    <li key={detail}>{detail}</li>
-                  ))}
-                </ul>
-              ) : null}
             </div>
           </div>
         )}
@@ -596,6 +453,67 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
               placeholder="e.g. gpt-4o-mini, claude-sonnet-4-20250514"
               className="mb-3 w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 font-mono outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
             />
+            {showCustomModelWarning && (
+              <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200/90 leading-relaxed">
+                For stable Release Gate results, prefer a pinned Anthropic model id ending in{" "}
+                <span className="font-mono bg-black/20 px-1 py-0.5 rounded">YYYYMMDD</span>.
+                <span className="block mt-1 text-amber-400/80">
+                  Custom/latest ids can change behavior over time.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+          <span
+            className={clsx(
+              "text-[11px] font-medium",
+              detectedMode ? "text-slate-500" : "text-fuchsia-300"
+            )}
+          >
+            {detectedMode
+              ? "Using detected baseline model"
+              : hostedMode
+                ? "Hosted model is active for this run"
+                : "Custom BYOK model is active for this run"}
+          </span>
+          {!detectedMode && (
+            <button
+              type="button"
+              disabled={editsLocked}
+              onClick={() => selectModelSource("detected")}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-300 transition-all hover:bg-white/5 hover:text-white"
+            >
+              Use detected
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
+              2. Credentials
+            </div>
+            <div className="text-base font-semibold text-white">
+              {detectedMode
+                ? "Baseline key status"
+                : customMode
+                  ? "Provider key for this run"
+                  : "Managed by the selected model source"}
+            </div>
+          </div>
+          <div className="text-right text-xs text-slate-400">
+            <div>
+              Status: <span className="text-slate-200">{keyStatusLabel}</span>
+            </div>
+          </div>
+        </div>
+
+        {customMode ? (
+          <>
             <label className="block mb-3">
               <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-2 block">
                 API key (for this run only)
@@ -621,8 +539,7 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
               </div>
               <p className="text-xs text-slate-500 mb-3 leading-relaxed">
                 Keys registered in Live View apply to Detected mode. To reuse a key in Custom
-                without pasting each time, save it here (project-wide, not tied to a node). Optional
-                label helps you tell keys apart.
+                without pasting each time, save it here.
               </p>
               <input
                 type="text"
@@ -684,62 +601,35 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
                 </ul>
               ) : null}
             </div>
-            <div
-              className={clsx(
-                "rounded-xl border px-4 py-3 text-xs leading-relaxed",
-                keyStatusToneClasses
-              )}
-            >
-              {keyStatusText}
-              {missingProviderKeyDetails.length > 0 ? (
-                <ul className="mt-2 list-disc pl-5">
-                  {missingProviderKeyDetails.map(detail => (
-                    <li key={detail}>{detail}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-            {showCustomModelWarning && (
-              <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200/90 leading-relaxed">
-                For stable Release Gate results, prefer a pinned Anthropic model id ending in{" "}
-                <span className="font-mono bg-black/20 px-1 py-0.5 rounded">YYYYMMDD</span>.
-                <span className="block mt-1 text-amber-400/80">
-                  Custom/latest ids can change behavior over time.
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+          </>
+        ) : null}
 
-        <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
-          <span
-            className={clsx(
-              "text-[11px] font-medium",
-              detectedMode ? "text-slate-500" : "text-fuchsia-300"
-            )}
-          >
-            {detectedMode
-              ? "Using detected baseline model"
-              : hostedMode
-                ? "Hosted model is active for this run"
-                : "Custom BYOK model is active for this run"}
-          </span>
-          {!detectedMode && (
-            <button
-              type="button"
-              disabled={editsLocked}
-              onClick={() => selectModelSource("detected")}
-              className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-slate-300 transition-all hover:bg-white/5 hover:text-white"
-            >
-              Use detected
-            </button>
+        {hostedMode ? (
+          <div className="rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-300">
+            Credential changes are not available in hosted mode from this section.
+          </div>
+        ) : null}
+
+        <div
+          className={clsx(
+            "rounded-xl border px-4 py-3 text-xs leading-relaxed",
+            keyStatusToneClasses
           )}
+        >
+          {keyStatusText}
+          {missingProviderKeyDetails.length > 0 ? (
+            <ul className="mt-2 list-disc pl-5">
+              {missingProviderKeyDetails.map(detail => (
+                <li key={detail}>{detail}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
 
       <div className="flex flex-col rounded-2xl border border-white/5 bg-white/[0.02] p-5 shadow-sm">
         <div className="mb-2 block text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">
-          4. System Prompt
+          3. System prompt
         </div>
         <textarea
           value={requestSystemPrompt}
@@ -765,6 +655,100 @@ export function ReleaseGateConfigPanelCoreTab({ m }: { m: ReleaseGateConfigPanel
             {isSystemPromptOverridden ? "Override active" : "Using node default"}
           </div>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400 mb-1">
+              4. Pass rules
+            </div>
+            <div className="text-base font-semibold text-white">Release Gate thresholds</div>
+          </div>
+          <div className="text-right text-xs text-slate-400">
+            <div>
+              Fail max:{" "}
+              <span className="text-slate-200">
+                {(normalizedThresholds.failRateMax * 100).toFixed(0)}%
+              </span>
+            </div>
+            <div className="mt-0.5">
+              Flaky max:{" "}
+              <span className="text-slate-200">
+                {(normalizedThresholds.flakyRateMax * 100).toFixed(0)}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-3">
+          {Object.entries(REPLAY_THRESHOLD_PRESETS).map(([presetId, preset]) => (
+            <button
+              key={presetId}
+              type="button"
+              disabled={editsLocked}
+              onClick={() => {
+                if (editsLocked) return;
+                setThresholdPreset?.(presetId as ReleaseGateConfigThresholdPreset);
+                setFailRateMax?.(preset.failRateMax);
+                setFlakyRateMax?.(preset.flakyRateMax);
+              }}
+              className={clsx(
+                "rounded-xl border px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-all",
+                thresholdPreset === presetId
+                  ? "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-100"
+                  : "border-white/10 bg-[#0a0c10] text-slate-300 hover:border-white/20 hover:bg-white/[0.04]"
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        {thresholdPreset === "custom" ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="block">
+              <span className="mb-2 block text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">
+                Fail max (%)
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                disabled={editsLocked}
+                value={(normalizedThresholds.failRateMax * 100).toFixed(0)}
+                onChange={e => {
+                  if (editsLocked) return;
+                  const parsed = Number(e.target.value);
+                  if (!Number.isFinite(parsed)) return;
+                  setFailRateMax?.(parsed / 100);
+                }}
+                className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">
+                Flaky max (%)
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                disabled={editsLocked}
+                value={(normalizedThresholds.flakyRateMax * 100).toFixed(0)}
+                onChange={e => {
+                  if (editsLocked) return;
+                  const parsed = Number(e.target.value);
+                  if (!Number.isFinite(parsed)) return;
+                  setFlakyRateMax?.(parsed / 100);
+                }}
+                className="w-full rounded-xl border border-white/10 bg-[#0a0c10] px-4 py-3 text-sm text-slate-100 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50"
+              />
+            </label>
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-sm flex flex-col">
