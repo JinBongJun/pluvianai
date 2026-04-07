@@ -195,7 +195,7 @@ export function ReleaseGateConfigPanelPreviewTab({
                       <div className="font-semibold text-cyan-200">
                         {tool.name.trim() || "Unnamed tool"}{" "}
                         <span className="font-normal text-cyan-100/80">
-                          {toolType === "action" ? "(action)" : "(retrieval)"}
+                          {toolType === "action" ? "Action payload" : "Returned fields"}
                         </span>
                       </div>
                       <div className="mt-1 space-y-1">
