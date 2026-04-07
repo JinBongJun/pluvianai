@@ -314,10 +314,8 @@ export function useReleaseGateConfigPanelParityTabModel(
         description: "",
         toolType,
         parameters: '{\n  "type": "object",\n  "properties": {}\n}',
-        expectedResultFields:
-          toolType === "retrieval" ? [{ id: crypto.randomUUID(), name: "", description: "" }] : [],
-        expectedActionFields:
-          toolType === "action" ? [{ id: crypto.randomUUID(), name: "", description: "" }] : [],
+        expectedResultFields: [],
+        expectedActionFields: [],
         resultGuide: "",
         baselineSampleSummary: "",
       },
