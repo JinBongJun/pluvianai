@@ -238,13 +238,13 @@ export function useReleaseGateConfigPanelParityTabModel(
     ? perLogOverridesCount > 0
       ? `Shared and per-log fields (${perLogOverridesCount} log${perLogOverridesCount === 1 ? "" : "s"})`
       : "Shared fields active"
-    : "No request context fields";
+    : "No extra request fields";
   const contextSummarySubtitle =
     toolContextMode === "inject"
       ? c.toolContextScope === "global"
-        ? "Shared missing context"
-        : "Per-log missing context"
-      : "Use baseline only";
+        ? "Shared extra context"
+        : "Per-log extra context"
+      : "Use baseline as-is";
   const timelineSummarySubtitle = !snapshotIdForBaselineTimeline
     ? "Select a baseline snapshot on the main screen"
     : baselineTimelineLoading
