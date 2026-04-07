@@ -168,11 +168,10 @@ export default function Home() {
         {/* ====== Vector Shapes & Curtain Lights (Figma Match) ====== */}
 
         {/* Left Side Vector Capsules */}
-        <div className="absolute top-[10%] -left-[100px] md:-left-[80px] w-[180px] md:w-[220px] h-[400px] md:h-[500px] border-[6px] md:border-[10px] border-cyan-500 rounded-r-full opacity-80 pointer-events-none shadow-[0_0_40px_rgba(6,182,212,0.3)]" />
-        <div className="absolute bottom-[10%] -left-[100px] md:-left-[80px] w-[180px] md:w-[220px] h-[200px] md:h-[250px] border-[6px] md:border-[10px] border-white rounded-r-full opacity-90 pointer-events-none shadow-[0_0_30px_rgba(255,255,255,0.4)]" />
+        <div className="absolute top-[10%] -left-[100px] md:-left-[80px] w-[180px] md:w-[220px] h-[400px] md:h-[500px] border-[6px] md:border-[10px] border-cyan-500/40 rounded-r-full opacity-60 pointer-events-none shadow-[0_0_40px_rgba(6,182,212,0.15)]" />
 
         {/* Right Side Vector Arc */}
-        <div className="absolute top-[-30%] -right-[300px] md:-right-[250px] w-[600px] md:w-[800px] h-[800px] md:h-[1100px] border-[6px] md:border-[10px] border-emerald-500 rounded-l-full opacity-60 pointer-events-none shadow-[0_0_60px_rgba(16,185,129,0.2)]" />
+        <div className="absolute top-[-30%] -right-[300px] md:-right-[250px] w-[600px] md:w-[800px] h-[800px] md:h-[1100px] border-[6px] md:border-[10px] border-emerald-500/40 rounded-l-full opacity-40 pointer-events-none shadow-[0_0_60px_rgba(16,185,129,0.15)]" />
 
         {/* Diagonal Curtain Lights */}
         <div className="absolute top-[-40%] right-[-20%] w-[150%] h-[400px] bg-gradient-to-r from-transparent via-cyan-900/40 to-transparent -rotate-[35deg] blur-[80px] pointer-events-none mix-blend-screen" />
@@ -181,8 +180,7 @@ export default function Home() {
 
         {/* Emerald Glow behind the glass box */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-emerald-500/20 blur-[120px] rounded-full pointer-events-none" />
-        {/* Diagonal grid lines specific to this section to match the Figma reference */}
-        <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.03)_50%,transparent_75%)] bg-[length:60px_60px] pointer-events-none -z-10" />
+
 
         <div className="w-full max-w-5xl mx-auto px-6 md:px-12 relative z-10">
           <div className="rounded-[40px] border border-white/10 bg-white/[0.02] backdrop-blur-2xl py-24 px-8 shadow-2xl relative overflow-hidden">

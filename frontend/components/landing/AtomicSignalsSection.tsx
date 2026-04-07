@@ -20,32 +20,7 @@ export default function AtomicSignalsSection() {
               with confidence.
             </p>
           </div>
-          {/* Decorative Wireframe Polyhedron (Abstract Background Element) */}
-          <div className="absolute -top-[100px] right-[-100px] md:right-0 w-[600px] h-[600px] hidden md:flex items-center justify-center opacity-[0.05] pointer-events-none z-0">
-            <svg
-              viewBox="0 0 100 100"
-              fill="none"
-              stroke="currentColor"
-              className="w-full h-full text-white animate-[spin_40s_linear_infinite]"
-              strokeWidth="0.2"
-            >
-              {/* Outer Hexagon */}
-              <polygon points="50,5 95,27.5 95,72.5 50,95 5,72.5 5,27.5" />
-              {/* Inner Hexagon */}
-              <polygon points="50,20 80,37.5 80,62.5 50,80 20,62.5 20,37.5" />
-              {/* Connecting Lines */}
-              <line x1="50" y1="5" x2="50" y2="20" />
-              <line x1="95" y1="27.5" x2="80" y2="37.5" />
-              <line x1="95" y1="72.5" x2="80" y2="62.5" />
-              <line x1="50" y1="95" x2="50" y2="80" />
-              <line x1="5" y1="72.5" x2="20" y2="62.5" />
-              <line x1="5" y1="27.5" x2="20" y2="37.5" />
-              {/* Center cross */}
-              <line x1="20" y1="37.5" x2="80" y2="62.5" />
-              <line x1="20" y1="62.5" x2="80" y2="37.5" />
-              <line x1="50" y1="20" x2="50" y2="80" />
-            </svg>
-          </div>
+
         </div>
 
         {/* Asymmetrical Staggered Grid Layout */}
