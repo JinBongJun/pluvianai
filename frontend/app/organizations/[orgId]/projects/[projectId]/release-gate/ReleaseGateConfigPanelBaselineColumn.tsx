@@ -78,12 +78,12 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
               >
                 <option value="">
                   Newest (auto
-                  {autoRepresentativeBaselineSnapshotId ? ` ¡¤ #${autoRepresentativeBaselineSnapshotId}` : ""})
+                  {autoRepresentativeBaselineSnapshotId ? ` Â· #${autoRepresentativeBaselineSnapshotId}` : ""})
                 </option>
                 {representativeBaselinePickerOptions.map(opt => (
                   <option key={opt.id} value={opt.id}>
                     #{opt.id}
-                    {opt.createdAt ? ` ¡¤ ${opt.createdAt}` : ""}
+                    {opt.createdAt ? ` Â· ${opt.createdAt}` : ""}
                   </option>
                 ))}
               </select>
@@ -149,7 +149,7 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
                       : null,
                   ]
                     .filter(Boolean)
-                    .join(" ¡¤ ") || "Default / not captured"}
+                    .join(" Â· ") || "Default / not captured"}
                 </div>
               </div>
             </div>
