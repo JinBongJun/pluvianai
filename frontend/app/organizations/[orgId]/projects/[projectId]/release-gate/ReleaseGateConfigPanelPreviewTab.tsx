@@ -162,7 +162,7 @@ export function ReleaseGateConfigPanelPreviewTab({
           {toolReviewItems.length > 0 ? (
             <div className="mt-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-3 text-xs text-cyan-100">
               <div className="font-bold uppercase tracking-[0.15em] text-cyan-300">
-                Tool setup review
+                Tool review
               </div>
               <div className="mt-2 space-y-3">
                 {toolReviewItems.map(tool => {
@@ -184,13 +184,17 @@ export function ReleaseGateConfigPanelPreviewTab({
                       <div className="font-semibold text-cyan-200">
                         {tool.name.trim() || "Unnamed tool"}{" "}
                         <span className="font-normal text-cyan-100/80">
-                          {toolType === "action" ? "Action tool" : "Retrieval tool"}
+                          {toolType === "action"
+                            ? "Tool that sends or updates"
+                            : "Tool that fetches info"}
                         </span>
                       </div>
                       {visibleFields.length > 0 ? (
                         <div className="mt-2">
                           <div className="font-semibold text-cyan-100/85">
-                            {toolType === "action" ? "Action payload" : "Returned fields"}
+                            {toolType === "action"
+                              ? "Sent or created fields"
+                              : "Info returned"}
                           </div>
                           <div className="mt-1 space-y-1">
                             {visibleFields.map(field => (
@@ -206,7 +210,7 @@ export function ReleaseGateConfigPanelPreviewTab({
                       ) : null}
                       {baselineSampleSummary ? (
                         <div className="mt-2 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.08] px-2.5 py-2 text-emerald-100/90">
-                          <div className="mb-1 font-semibold text-emerald-200">Baseline sample</div>
+                          <div className="mb-1 font-semibold text-emerald-200">Baseline example</div>
                           <div className="whitespace-pre-wrap break-words">
                             {baselineSampleSummary}
                           </div>
@@ -214,7 +218,7 @@ export function ReleaseGateConfigPanelPreviewTab({
                       ) : null}
                       {resultGuide ? (
                         <div className="mt-2 text-fuchsia-100/90">
-                          <span className="font-semibold text-fuchsia-200">Extra notes:</span>{" "}
+                          <span className="font-semibold text-fuchsia-200">Optional notes:</span>{" "}
                           {resultGuide}
                         </div>
                       ) : null}
