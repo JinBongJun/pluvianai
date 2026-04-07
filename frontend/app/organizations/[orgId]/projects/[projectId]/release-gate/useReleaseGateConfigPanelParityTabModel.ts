@@ -242,6 +242,7 @@ export function useReleaseGateConfigPanelParityTabModel(
         name: "",
         description: "",
         parameters: '{\n  "type": "object",\n  "properties": {}\n}',
+        resultGuide: "",
       },
     ]);
   };
