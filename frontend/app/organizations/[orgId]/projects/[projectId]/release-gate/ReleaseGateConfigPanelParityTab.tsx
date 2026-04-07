@@ -79,6 +79,7 @@ export function ReleaseGateConfigPanelParityTab({
     onToolContextFileChange,
     triggerToolContextFilePick,
   } = m;
+  const [openToolSchemas, setOpenToolSchemas] = React.useState<Record<string, boolean>>({});
 
   const updateExpectedField = (
     toolId: string,
@@ -164,6 +165,7 @@ export function ReleaseGateConfigPanelParityTab({
               const expectedFieldKey =
                 toolType === "action" ? "expectedActionFields" : "expectedResultFields";
               const expectedFields = tool[expectedFieldKey] ?? [];
+              const schemaOpen = openToolSchemas[tool.id] ?? false;
               return (
                 <div key={tool.id} className="rounded-xl border border-white/10 bg-[#0a0c10] p-5">
                   <div className="mb-4 flex items-center justify-between gap-3">
@@ -242,36 +244,16 @@ export function ReleaseGateConfigPanelParityTab({
                   </div>
 
                   <div className="space-y-4">
-                    <label className="block space-y-2">
-                      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                        Additional guidance (optional)
-                      </span>
-                      <textarea
-                        value={tool.resultGuide ?? ""}
-                        onChange={e => updateTool(tool.id, { resultGuide: e.target.value })}
-                        disabled={editsLocked}
-                        spellCheck={false}
-                        placeholder={
-                          toolType === "action"
-                            ? "Add any extra guidance about the action, payload, or content this tool should produce."
-                            : "Add any extra guidance about the information this tool should return, such as dates, titles, excerpts, or structured facts."
-                        }
-                        className="min-h-[96px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
-                      />
-                    </label>
-
                     <div className="rounded-xl border border-white/10 bg-[#0f1115] p-4">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
                           <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
-                            {toolType === "action"
-                              ? "Expected action payload"
-                              : "Expected returned fields"}
+                            {toolType === "action" ? "Action payload" : "Returned fields"}
                           </div>
                           <div className="mt-1 text-xs text-slate-500">
                             {toolType === "action"
-                              ? "List the fields this tool should produce or send."
-                              : "List the fields this tool should return to the model."}
+                              ? "List what this tool should produce or send."
+                              : "List what should come back to the model."}
                           </div>
                         </div>
                         <button
@@ -288,13 +270,14 @@ export function ReleaseGateConfigPanelParityTab({
                       <div className="space-y-3">
                         {expectedFields.length === 0 ? (
                           <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-3 py-3 text-xs text-slate-500">
-                            {toolType === "action"
-                              ? "No expected action fields yet."
-                              : "No expected returned fields yet."}
+                            {toolType === "action" ? "No action fields yet." : "No returned fields yet."}
                           </div>
                         ) : (
                           expectedFields.map((field, fieldIndex) => (
-                            <div key={field.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                            <div
+                              key={field.id}
+                              className="rounded-lg border border-white/10 bg-black/20 p-3"
+                            >
                               <div className="mb-2 flex items-center justify-between gap-3">
                                 <div className="text-xs font-semibold text-slate-300">
                                   Field {fieldIndex + 1}
@@ -309,7 +292,7 @@ export function ReleaseGateConfigPanelParityTab({
                                   Remove
                                 </button>
                               </div>
-                              <div className="grid gap-3 md:grid-cols-2">
+                              <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                                 <label className="space-y-2">
                                   <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
                                     Field name
@@ -355,21 +338,58 @@ export function ReleaseGateConfigPanelParityTab({
 
                     <label className="block space-y-2">
                       <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                        Inputs schema
+                        Extra notes (optional)
                       </span>
                       <textarea
-                        value={tool.parameters}
-                        onChange={e => updateTool(tool.id, { parameters: e.target.value })}
+                        value={tool.resultGuide ?? ""}
+                        onChange={e => updateTool(tool.id, { resultGuide: e.target.value })}
                         disabled={editsLocked}
                         spellCheck={false}
-                        className="min-h-[160px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
+                        placeholder={
+                          toolType === "action"
+                            ? "Add any extra notes about the action, payload, or content this tool should produce."
+                            : "Add any extra notes about the information this tool should return, such as dates, titles, excerpts, or structured facts."
+                        }
+                        className="min-h-[88px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
                       />
-                      {parametersError && (
-                        <div className="mt-2 text-xs font-medium text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
-                          {parametersError}
-                        </div>
-                      )}
                     </label>
+
+                    <div className="rounded-xl border border-white/10 bg-[#0f1115]">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenToolSchemas(prev => ({ ...prev, [tool.id]: !schemaOpen }))
+                        }
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                      >
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                            Inputs schema
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">JSON schema</div>
+                        </div>
+                        <div className="text-xs font-medium text-slate-400">
+                          {schemaOpen ? "Hide" : "Show"}
+                        </div>
+                      </button>
+                      {schemaOpen ? (
+                        <div className="border-t border-white/10 px-4 pb-4 pt-3">
+                          <textarea
+                            value={tool.parameters}
+                            onChange={e => updateTool(tool.id, { parameters: e.target.value })}
+                            disabled={editsLocked}
+                            spellCheck={false}
+                            className="min-h-[160px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-4 text-[13px] font-mono leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
+                          />
+                          {parametersError && (
+                            <div className="mt-2 text-xs font-medium text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+                              {parametersError}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+
                   </div>
                 </div>
               );
