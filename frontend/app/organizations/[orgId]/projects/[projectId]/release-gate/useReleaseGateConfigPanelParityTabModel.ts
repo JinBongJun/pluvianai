@@ -265,6 +265,38 @@ export function useReleaseGateConfigPanelParityTabModel(
     setToolsList(prev => (prev.length > 0 ? prev : inferredTools));
   }, [editsLocked, setToolsList, toolsList.length, baselineToolTimelineRows]);
 
+  React.useEffect(() => {
+    if (editsLocked) return;
+    if (!setToolsList) return;
+    if (toolsList.length === 0) return;
+    if (baselineToolTimelineRows.length === 0) return;
+
+    const latestResultByTool = new Map<string, string>();
+    for (const row of baselineToolTimelineRows) {
+      const stepType = String(row.step_type || "").trim().toLowerCase();
+      const toolName = String(row.tool_name || "").trim();
+      if (stepType !== "tool_result" || !toolName) continue;
+      const summary = summarizeBaselineToolResult(row);
+      if (!summary) continue;
+      latestResultByTool.set(toolName, summary);
+    }
+    if (latestResultByTool.size === 0) return;
+
+    setToolsList(prev => {
+      let changed = false;
+      const next = prev.map(tool => {
+        if (String(tool.baselineSampleSummary || "").trim()) return tool;
+        const toolName = String(tool.name || "").trim();
+        if (!toolName) return tool;
+        const baselineSampleSummary = latestResultByTool.get(toolName);
+        if (!baselineSampleSummary) return tool;
+        changed = true;
+        return { ...tool, baselineSampleSummary };
+      });
+      return changed ? next : prev;
+    });
+  }, [editsLocked, setToolsList, toolsList.length, baselineToolTimelineRows]);
+
   const updateTool = (toolId: string, patch: Partial<EditableTool>) => {
     if (editsLocked) return;
     if (!setToolsList) return;
@@ -298,33 +330,6 @@ export function useReleaseGateConfigPanelParityTabModel(
     setToolsList(prev => prev.filter(tool => tool.id !== toolId));
   };
 
-  const importBaselineToolSamples = () => {
-    if (editsLocked) return;
-    if (!setToolsList) return;
-    if (!baselineToolTimelineRows.length) return;
-
-    const latestResultByTool = new Map<string, string>();
-    for (const row of baselineToolTimelineRows) {
-      const stepType = String(row.step_type || "").trim().toLowerCase();
-      const toolName = String(row.tool_name || "").trim();
-      if (stepType !== "tool_result" || !toolName) continue;
-      const summary = summarizeBaselineToolResult(row);
-      if (!summary) continue;
-      latestResultByTool.set(toolName, summary);
-    }
-
-    if (latestResultByTool.size === 0) return;
-
-    setToolsList(prev =>
-      prev.map(tool => {
-        const toolName = String(tool.name || "").trim();
-        if (!toolName) return tool;
-        const baselineSampleSummary = latestResultByTool.get(toolName);
-        return baselineSampleSummary ? { ...tool, baselineSampleSummary } : tool;
-      })
-    );
-  };
-
   return {
     parityOpenTools,
     setParityOpenTools,
@@ -356,7 +361,6 @@ export function useReleaseGateConfigPanelParityTabModel(
     updateTool,
     addTool,
     removeTool,
-    importBaselineToolSamples,
   };
 }
 

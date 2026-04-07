@@ -47,7 +47,6 @@ export function ReleaseGateConfigPanelParityTab({
     parityOpenContext,
     setParityOpenContext,
     contextSummarySubtitle,
-    importBaselineToolSamples,
     handleRequestJsonBlur,
     handleResetJsonToBaseline,
     toolContextLoadBusy,
@@ -80,6 +79,7 @@ export function ReleaseGateConfigPanelParityTab({
     triggerToolContextFilePick,
   } = m;
   const [openToolSchemas, setOpenToolSchemas] = React.useState<Record<string, boolean>>({});
+  const [openToolTypeEditors, setOpenToolTypeEditors] = React.useState<Record<string, boolean>>({});
 
   const updateExpectedField = (
     toolId: string,
@@ -117,6 +117,26 @@ export function ReleaseGateConfigPanelParityTab({
     });
   };
 
+  const updateToolType = (toolId: string, nextToolType: "retrieval" | "action") => {
+    const tool = toolsList.find(item => item.id === toolId);
+    if (!tool) return;
+    updateTool(toolId, {
+      toolType: nextToolType,
+      expectedResultFields:
+        nextToolType === "retrieval"
+          ? tool.expectedResultFields?.length
+            ? tool.expectedResultFields
+            : [{ id: crypto.randomUUID(), name: "", description: "" }]
+          : tool.expectedResultFields ?? [],
+      expectedActionFields:
+        nextToolType === "action"
+          ? tool.expectedActionFields?.length
+            ? tool.expectedActionFields
+            : [{ id: crypto.randomUUID(), name: "", description: "" }]
+          : tool.expectedActionFields ?? [],
+    });
+  };
+
   return (
     <>
       <p className="rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-xs leading-relaxed text-slate-500">
@@ -130,19 +150,10 @@ export function ReleaseGateConfigPanelParityTab({
         onToggle={() => setParityOpenTools(o => !o)}
       >
         <p className="mb-4 text-sm text-slate-400">
-          Baseline tools appear here automatically when captured. You can still edit them for the
-          candidate run.
+          Baseline tools and recorded samples appear here automatically when captured. You can
+          still edit the candidate setup.
         </p>
         <div className="mb-4 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => importBaselineToolSamples?.()}
-            disabled={editsLocked || baselineToolTimelineRows.length === 0}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-          >
-            <RefreshCcw className="w-3.5 h-3.5" />
-            Import baseline samples
-          </button>
           <button
             type="button"
             onClick={() => addTool("retrieval")}
@@ -165,8 +176,7 @@ export function ReleaseGateConfigPanelParityTab({
 
         {toolsList.length === 0 ? (
           <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-5 py-8 text-center text-sm text-slate-500">
-            No baseline tools were captured. Add tools only if the candidate run should allow
-            them.
+            No baseline tools were captured. Add tools only if the candidate run should allow them.
           </div>
         ) : (
           <div className="space-y-4">
@@ -186,15 +196,30 @@ export function ReleaseGateConfigPanelParityTab({
                       </span>
                       {toolType === "action" ? "Action tool" : "Retrieval tool"}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeTool(tool.id)}
-                      disabled={editsLocked}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-xs font-medium text-rose-400/80 hover:bg-rose-500/10 hover:text-rose-400 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Remove
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenToolTypeEditors(prev => ({
+                            ...prev,
+                            [tool.id]: !prev[tool.id],
+                          }))
+                        }
+                        disabled={editsLocked}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[11px] font-medium text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Change type
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeTool(tool.id)}
+                        disabled={editsLocked}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2.5 py-1.5 text-xs font-medium text-rose-400/80 hover:bg-rose-500/10 hover:text-rose-400 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remove
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2 mb-4">
@@ -222,29 +247,16 @@ export function ReleaseGateConfigPanelParityTab({
                         className="w-full rounded-xl border border-white/10 bg-[#0f1115] px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
                       />
                     </label>
-                    <label className="space-y-2 md:col-span-2">
+                  </div>
+
+                  {openToolTypeEditors[tool.id] ? (
+                    <label className="mb-4 block space-y-2">
                       <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
                         Tool type
                       </span>
                       <select
                         value={toolType}
-                        onChange={e =>
-                          updateTool(tool.id, {
-                            toolType: e.target.value as "retrieval" | "action",
-                            expectedResultFields:
-                              e.target.value === "retrieval"
-                                ? tool.expectedResultFields?.length
-                                  ? tool.expectedResultFields
-                                  : [{ id: crypto.randomUUID(), name: "", description: "" }]
-                                : tool.expectedResultFields ?? [],
-                            expectedActionFields:
-                              e.target.value === "action"
-                                ? tool.expectedActionFields?.length
-                                  ? tool.expectedActionFields
-                                  : [{ id: crypto.randomUUID(), name: "", description: "" }]
-                                : tool.expectedActionFields ?? [],
-                          })
-                        }
+                        onChange={e => updateToolType(tool.id, e.target.value as "retrieval" | "action")}
                         disabled={editsLocked}
                         className="w-full rounded-xl border border-white/10 bg-[#0f1115] px-4 py-2.5 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
                       >
@@ -252,7 +264,7 @@ export function ReleaseGateConfigPanelParityTab({
                         <option value="action">Action</option>
                       </select>
                     </label>
-                  </div>
+                  ) : null}
 
                   <div className="space-y-4">
                     {tool.baselineSampleSummary?.trim() ? (
