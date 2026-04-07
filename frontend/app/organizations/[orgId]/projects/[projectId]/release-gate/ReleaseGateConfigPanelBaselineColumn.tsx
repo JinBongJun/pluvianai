@@ -64,7 +64,7 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
               Representative preview log
             </div>
             {representativeBaselinePickerOptions.length === 0 ? (
-              <p className="text-xs text-slate-500">Loading snapshot metadataâ€¦</p>
+              <p className="text-xs text-slate-500">Loading snapshot metadata...</p>
             ) : (
               <select
                 disabled={editsLocked}
@@ -78,19 +78,18 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
               >
                 <option value="">
                   Newest (auto
-                  {autoRepresentativeBaselineSnapshotId ? ` Â· #${autoRepresentativeBaselineSnapshotId}` : ""})
+                  {autoRepresentativeBaselineSnapshotId ? ` ¡¤ #${autoRepresentativeBaselineSnapshotId}` : ""})
                 </option>
                 {representativeBaselinePickerOptions.map(opt => (
                   <option key={opt.id} value={opt.id}>
                     #{opt.id}
-                    {opt.createdAt ? ` Â· ${opt.createdAt}` : ""}
+                    {opt.createdAt ? ` ¡¤ ${opt.createdAt}` : ""}
                   </option>
                 ))}
               </select>
             )}
             <p className="mt-2 text-[11px] text-slate-500 leading-relaxed">
-              Defaults to the newest selected log by timestamp (then highest id if times tie). Use the menu to
-              preview a different selected log. Candidate settings still apply to every selected log in the run.
+              Defaults to the newest selected log. Change this only if you want a different baseline preview.
             </p>
           </div>
         ) : null}
@@ -150,7 +149,7 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
                       : null,
                   ]
                     .filter(Boolean)
-                    .join(" Â· ") || "Default / not captured"}
+                    .join(" ¡¤ ") || "Default / not captured"}
                 </div>
               </div>
             </div>
@@ -226,7 +225,7 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
 
       <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5 shadow-inner">
         <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-300/90 mb-3">
-          Candidate vs baseline (quick read)
+          Current setup vs baseline
         </div>
         <ul className="space-y-2.5">
           {paritySummaryLines.map(row => (
@@ -245,3 +244,4 @@ export function ReleaseGateConfigPanelBaselineColumn({ m }: { m: ReleaseGateConf
     </section>
   );
 }
+

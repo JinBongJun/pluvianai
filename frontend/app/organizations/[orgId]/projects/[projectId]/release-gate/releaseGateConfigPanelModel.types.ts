@@ -87,6 +87,8 @@ export type ReleaseGateConfigPanelParityTabProps = Pick<
   | "addTool"
   | "baselineTimelineLoading"
   | "baselineToolTimelineRows"
+  | "requestBody"
+  | "updateRequestNumberField"
   | "bodyOverridesFileInputRef"
   | "bodyOverridesJsonError"
   | "bodyOverridesJsonValue"
