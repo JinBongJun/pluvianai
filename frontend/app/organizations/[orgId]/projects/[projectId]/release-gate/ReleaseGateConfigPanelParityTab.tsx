@@ -527,7 +527,7 @@ export function ReleaseGateConfigPanelParityTab({
       </div>
 
       <CollapsiblePanel
-        title="Request context fields"
+        title="Extra request fields"
         subtitle={overridesSummarySubtitle}
         open={parityOpenOverrides}
         onToggle={() => setParityOpenOverrides(o => !o)}
@@ -544,16 +544,15 @@ export function ReleaseGateConfigPanelParityTab({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
             <div>
               <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-violet-300/90 mb-1">
-                Shared fields (all selected logs)
+                Shared fields for all selected logs
               </div>
               <div className="text-sm text-slate-400">
-                Add attachments, metadata, locale, or provider request fields for replay. Use this
-                for things like{" "}
+                Add extra request fields for replay, such as{" "}
                 <span className="font-mono text-slate-500">attachments</span>,{" "}
                 <span className="font-mono text-slate-500">documents</span>, locale, metadata, or
-                provider-specific options. It does <em>not</em> replace the saved conversation
-                messages. Defaults come from the representative snapshot when you select logs, and
-                the per-log boxes below only show fields that <em>differ</em> from this shared JSON.
+                provider-specific options. This does <em>not</em> replace the saved conversation
+                messages. Defaults come from the representative snapshot, and the per-log boxes
+                below only show fields that <em>differ</em> from this shared JSON.
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2 justify-end">
@@ -611,9 +610,11 @@ export function ReleaseGateConfigPanelParityTab({
                   Per-log fields
                 </div>
                 <p className="text-xs text-slate-500 mt-1 max-w-[48rem]">
-                  Only add fields that are different for this log. Matching values are hidden so you
-                  do not edit the same thing twice. Empty{" "}
-                  <code className="text-slate-400">{"{}"}</code> means use the shared fields only. Replay still applies shared fields first, then this log&apos;s fields.
+                  Only add fields that should be different for this log. Matching values are hidden
+                  to avoid duplicate editing. Empty{" "}
+                  <code className="text-slate-400">{"{}"}</code> means this log uses the shared
+                  fields only. Replay still applies shared fields first, then this log&apos;s
+                  fields.
                 </p>
               </div>
               <button
@@ -693,7 +694,7 @@ export function ReleaseGateConfigPanelParityTab({
       </CollapsiblePanel>
 
       <CollapsiblePanel
-        title="Missing context"
+        title="Extra context"
         subtitle={contextSummarySubtitle}
         open={parityOpenContext}
         onToggle={() => setParityOpenContext(o => !o)}
@@ -709,9 +710,9 @@ export function ReleaseGateConfigPanelParityTab({
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="text-sm text-slate-400">
-                Add only the context missing from the baseline request, such as a short tool
-                result summary, docs snippet, or policy reminder.
-                Per-log text is pre-filled from recorded tool results when available.
+                Add only the extra context missing from the baseline request, such as a short tool
+                result summary, docs snippet, or policy reminder. Per-log text is pre-filled from
+                captured tool results when available.
               </div>
             </div>
             <div className="flex flex-wrap gap-2 shrink-0">
@@ -722,7 +723,7 @@ export function ReleaseGateConfigPanelParityTab({
                 className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 <RefreshCcw className="w-3.5 h-3.5" />
-                Reset context from snapshots
+                Reset from captured logs
               </button>
               <button
                 type="button"
@@ -740,7 +741,7 @@ export function ReleaseGateConfigPanelParityTab({
                 ) : (
                   <RefreshCcw className="w-3.5 h-3.5" />
                 )}
-                Load from logs
+                Load captured tool results
               </button>
             </div>
           </div>
@@ -755,7 +756,7 @@ export function ReleaseGateConfigPanelParityTab({
                 disabled={editsLocked}
                 className="accent-fuchsia-500"
               />
-              Use baseline only
+              Use baseline as-is
             </label>
             <label className="inline-flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
               <input
@@ -766,7 +767,7 @@ export function ReleaseGateConfigPanelParityTab({
                 disabled={editsLocked}
                 className="accent-fuchsia-500"
               />
-              Add missing context
+              Add extra context
             </label>
           </div>
 
@@ -894,7 +895,7 @@ export function ReleaseGateConfigPanelParityTab({
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.01] px-4 py-5 text-sm text-slate-500">
-              No extra text: replay uses captured request data only.
+              No extra context added. Replay uses captured request data only.
             </div>
           )}
         </div>
