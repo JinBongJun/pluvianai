@@ -157,6 +157,8 @@ export type BuildReleaseGateMapRgDetailsInput = {
 export type ReleaseGateMapRgDetails = {
   provider: string | null;
   model: string;
+  displayProvider: string | null;
+  displayModel: string;
   prompt: string;
   toolsCount: number;
   activeChecks: string[];
@@ -205,6 +207,14 @@ export function buildReleaseGateMapRgDetails(
 ): ReleaseGateMapRgDetails | null {
   if (!p.agentId?.trim()) return null;
 
+  const displayModel =
+    p.modelSource === "detected"
+      ? String(p.runDataModel || "").trim()
+      : String(p.newModel || "").trim();
+  const displayProvider =
+    p.modelSource === "detected"
+      ? p.runDataProvider
+      : String(p.replayProvider || "").trim() || null;
   const requestTools = Array.isArray(p.requestBody.tools) ? p.requestBody.tools : [];
   const toolsCount = requestTools.length;
   const agentEvalConfig = p.agentEvalData?.config as Record<string, unknown> | undefined;
@@ -242,6 +252,8 @@ export function buildReleaseGateMapRgDetails(
   return {
     provider: p.runDataProvider,
     model: p.runDataModel,
+    displayProvider,
+    displayModel,
     prompt: String(p.requestSystemPrompt || p.runDataPrompt || "").trim(),
     toolsCount,
     activeChecks: p.runEvalElements.map((e: { name: string }) => e.name),
