@@ -19,10 +19,13 @@ export function ReleaseGateConfigPanelPreviewTab({
     usingModel,
     usingProvider,
     candidateRequestOverview,
+    toolsList,
     parityEnvironmentNotes,
     parityCandidateShapeNotes,
     finalCandidateJson,
   } = m;
+
+  const toolGuidance = toolsList.filter(tool => (tool.resultGuide ?? "").trim().length > 0);
 
   return (
     <div className="rounded-2xl border border-white/5 bg-[#0f1115] overflow-hidden flex flex-col shadow-inner">
@@ -146,6 +149,24 @@ export function ReleaseGateConfigPanelPreviewTab({
             <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
               Candidate replay still includes the key request shape detected on the baseline node
               call.
+            </div>
+          ) : null}
+          {toolGuidance.length > 0 ? (
+            <div className="mt-3 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-3 text-xs text-fuchsia-100">
+              <div className="font-bold uppercase tracking-[0.15em] text-fuchsia-300">
+                Tool guidance
+              </div>
+              <div className="mt-2 space-y-2">
+                {toolGuidance.map(tool => (
+                  <div key={tool.id}>
+                    <span className="font-semibold text-fuchsia-200">
+                      {tool.name.trim() || "Unnamed tool"}
+                    </span>
+                    {": "}
+                    <span>{tool.resultGuide?.trim()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>

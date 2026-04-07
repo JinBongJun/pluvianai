@@ -150,6 +150,7 @@ export type ReleaseGateConfigPanelPreviewTabProps = Pick<
   | "representativeBaselineId"
   | "selectedBaselineCount"
   | "setShowExpandedCandidatePreview"
+  | "toolsList"
   | "usingModel"
   | "usingProvider"
   | "validateOverridePreview"

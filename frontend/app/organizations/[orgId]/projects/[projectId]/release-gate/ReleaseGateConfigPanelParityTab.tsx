@@ -159,7 +159,7 @@ export function ReleaseGateConfigPanelParityTab({
                     </label>
                     <label className="space-y-2">
                       <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                        Description
+                        What it does
                       </span>
                       <input
                         value={tool.description}
@@ -171,7 +171,22 @@ export function ReleaseGateConfigPanelParityTab({
                     </label>
                   </div>
 
-                  <label className="block space-y-2">
+                  <div className="space-y-4">
+                    <label className="block space-y-2">
+                      <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+                        What this tool should return
+                      </span>
+                      <textarea
+                        value={tool.resultGuide ?? ""}
+                        onChange={e => updateTool(tool.id, { resultGuide: e.target.value })}
+                        disabled={editsLocked}
+                        spellCheck={false}
+                        placeholder="Describe the information this tool should return to the model, such as policy text, dates, article title, excerpt, or other structured facts."
+                        className="min-h-[96px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
+                      />
+                    </label>
+
+                    <label className="block space-y-2">
                     <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
                       Inputs schema
                     </span>
@@ -187,7 +202,8 @@ export function ReleaseGateConfigPanelParityTab({
                         {parametersError}
                       </div>
                     )}
-                  </label>
+                    </label>
+                  </div>
                 </div>
               );
             })}

@@ -16,6 +16,7 @@ export type ReleaseGateEditableTool = {
   name: string;
   description: string;
   parameters: string;
+  resultGuide?: string;
 };
 
 export type ReleaseGateDatasetSummary = {
