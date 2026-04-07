@@ -110,9 +110,12 @@ export function ReleaseGateSelectedAgentSurface({
   const promptPreview = String(resolvedDetails.prompt || "")
     .trim()
     .replace(/\s+/g, " ");
-  const modelLabel = String(resolvedDetails.model || "").trim().toLowerCase() || "unknown";
-  const providerLabel =
-    String(resolvedDetails.provider || "").trim().toLowerCase() || "release-gate";
+  const displayModel =
+    String(resolvedDetails.displayModel || resolvedDetails.model || "").trim() || "Unknown";
+  const displayProvider =
+    String(resolvedDetails.displayProvider || resolvedDetails.provider || "").trim() ||
+    "release-gate";
+  const providerLabel = displayProvider.toLowerCase();
   const samplingSummaryText =
     typeof rgConfig.samplingSummary === "string" ? rgConfig.samplingSummary.trim() : "";
   const toolsSummaryText =
@@ -184,7 +187,7 @@ export function ReleaseGateSelectedAgentSurface({
               <div className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5">
                 <Box className="h-2.5 w-2.5 text-slate-500" />
                 <span className="max-w-[120px] truncate text-[10px] font-medium text-slate-300">
-                  {resolvedDetails.model || "Unknown"}
+                  {displayModel}
                 </span>
               </div>
               <div className="flex items-center gap-1 rounded-md border border-white/[0.07] bg-white/[0.04] px-1.5 py-0.5">
@@ -281,7 +284,7 @@ export function ReleaseGateSelectedAgentSurface({
                       Test setup
                     </div>
                     <div className="mt-1 text-sm font-semibold text-white">
-                      {resolvedDetails.model || "Unknown model"}
+                      {displayModel}
                     </div>
                     <p className="mt-1 text-sm leading-6 text-slate-400">
                       {providerLabel}

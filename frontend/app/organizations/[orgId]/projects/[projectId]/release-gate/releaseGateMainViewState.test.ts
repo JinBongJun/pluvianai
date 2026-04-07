@@ -30,6 +30,8 @@ describe("releaseGateMainViewState", () => {
       getReleaseGateSelectedAgentSurfacePhase({
         provider: "openai",
         model: "gpt-4o",
+        displayProvider: "openai",
+        displayModel: "gpt-4o",
         prompt: "",
         toolsCount: 0,
         activeChecks: [],
