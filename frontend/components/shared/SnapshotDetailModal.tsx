@@ -147,21 +147,6 @@ function extractStepLogs(
   });
 }
 
-function buildToolSummaryEmptyLines(s: SnapshotForDetail): string[] {
-  const hasSummary = Array.isArray(s.tool_calls_summary) && s.tool_calls_summary.length > 0;
-  if (hasSummary) return [];
-  if (s.has_tool_calls) {
-    return [
-      "Tool calls were detected, but no summary was captured for this run.",
-      "Open technical details if you need the raw request fields.",
-    ];
-  }
-  return [
-    "No tool call summary was captured for this run.",
-    "Open technical details if you need the raw ingest fields.",
-  ];
-}
-
 function buildToolTimelineEmptyLines(s: SnapshotForDetail): string[] {
   const payload = (s.payload || {}) as Record<string, unknown>;
   const rawEvents = payload.tool_events;
@@ -293,9 +278,6 @@ export function SnapshotDetailModal({
   const tl = s.tool_timeline ?? [];
   const actionRows = tl.filter(r => r.step_type === "action");
   const toolIoRows = tl.filter(r => r.step_type !== "action");
-  const hasToolSummaryCards =
-    Array.isArray(s.tool_calls_summary) && s.tool_calls_summary.length > 0;
-  const summaryEmptyLines = buildToolSummaryEmptyLines(s);
   const timelineEmptyLines = buildToolTimelineEmptyLines(s);
   const actionsEmptyLines = buildActionsEmptyLines(s, actionRows.length);
 
@@ -330,7 +312,7 @@ export function SnapshotDetailModal({
     row => row.status === "fail" && toolRiskIds.has(row.id)
   );
   const hasToolEvidence =
-    hasToolSummaryCards || toolIoRows.length > 0 || actionRows.length > 0 || s.has_tool_calls;
+    toolIoRows.length > 0 || actionRows.length > 0 || s.has_tool_calls;
   const toolSectionTitle =
     hasToolRelatedEvalFailure || hasToolEvidence ? "Tool Evidence" : "Tool Details";
 
@@ -852,32 +834,8 @@ export function SnapshotDetailModal({
                   </span>
                 </div>
                 <p className="text-xs leading-relaxed text-slate-500">
-                  Captured tool calls, tool I/O, and outbound actions for this run.
+                  Captured tool history and outbound actions for this run.
                 </p>
-
-                <div className="space-y-3">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    Tool Calls
-                  </div>
-                  {hasToolSummaryCards ? (
-                    <div className="bg-[#030806] border border-white/5 rounded-[20px] p-6 shadow-inner space-y-4">
-                      {(s.tool_calls_summary || []).map((tc, idx) => (
-                        <div key={idx} className="border border-white/5 rounded-xl p-4 bg-[#0a0a0c]">
-                          <div className="text-xs font-bold text-amber-400/90 uppercase tracking-wider mb-2">
-                            {tc.name}
-                          </div>
-                          <pre className="text-xs text-slate-400 font-mono whitespace-pre-wrap break-all">
-                            {typeof tc.arguments === "string"
-                              ? tc.arguments
-                              : safeStringify(tc.arguments)}
-                          </pre>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyHint lines={summaryEmptyLines} />
-                  )}
-                </div>
 
                 <div className="space-y-3">
                   {toolIoRows.length > 0 ? (

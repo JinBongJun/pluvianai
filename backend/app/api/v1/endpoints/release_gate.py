@@ -41,6 +41,7 @@ from app.api.v1.endpoints.behavior import (
     _iso,
 )
 from app.core.behavior_diff import compute_behavior_diff, tool_calls_summary_to_sequence
+from app.utils.tool_evidence import tool_sequence_from_snapshot_payload_or_summary
 from app.core.canonical import (
     response_to_canonical_steps,
     response_to_canonical_tool_calls_summary,
@@ -1622,10 +1623,10 @@ def _build_replay_candidate_steps(
 
 def _baseline_sequence_for_snapshot(snapshot: Snapshot) -> List[str]:
     """Get ordered tool name list from snapshot for behavior diff baseline."""
-    raw = getattr(snapshot, "tool_calls_summary", None)
-    if isinstance(raw, list):
-        return tool_calls_summary_to_sequence(raw)
-    return []
+    return tool_sequence_from_snapshot_payload_or_summary(
+        getattr(snapshot, "payload", None),
+        getattr(snapshot, "tool_calls_summary", None),
+    )
 
 
 def _build_stage1_tool_evidence(
@@ -3941,4 +3942,3 @@ async def delete_release_gate_history(
     check_project_write_access(project_id, current_user, db)
     lifecycle = DataLifecycleService(db)
     return lifecycle.delete_release_gate_history_session(project_id, report_id)
-
