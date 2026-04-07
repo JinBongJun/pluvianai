@@ -1,12 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import ProjectLayout from "@/components/layout/ProjectLayout";
 import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { projectsAPI, organizationsAPI } from "@/lib/api";
 import { orgKeys } from "@/lib/queryKeys";
+import {
+  buildCanonicalProjectPath,
+  getProjectScopeMismatchOrgId,
+} from "@/lib/projectRouteScope";
 import {
   Zap,
   Copy,
@@ -26,6 +30,8 @@ import Button from "@/components/ui/Button";
 
 export default function InfrastructureHubPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { orgId, projectId } = useOrgProjectParams();
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
@@ -33,8 +39,21 @@ export default function InfrastructureHubPage() {
     projectId ? ["project", projectId] : null,
     async () => {
       try {
-        return await projectsAPI.get(projectId);
+        return await projectsAPI.get(projectId, { expectedOrgId: orgId });
       } catch (e: any) {
+        const actualOrgId = getProjectScopeMismatchOrgId(e);
+        if (actualOrgId && pathname) {
+          router.replace(
+            buildCanonicalProjectPath(
+              pathname,
+              orgId,
+              actualOrgId,
+              projectId,
+              searchParams?.toString() ? `?${searchParams.toString()}` : ""
+            )
+          );
+          return undefined;
+        }
         const status = e?.response?.status;
         const msg = e?.response?.data?.detail ?? e?.response?.data?.error?.message ?? "";
         if (status === 404 && (msg === "Project not found" || msg === "Not Found")) {

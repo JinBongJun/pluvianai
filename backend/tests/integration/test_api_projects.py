@@ -227,6 +227,56 @@ class TestProjectsAPI:
         assert payload["details"]["details"]["access_source"] == "organization_member"
         assert payload["details"]["details"]["org_role"] == "viewer"
         assert "read-only" in payload["message"].lower()
+
+    async def test_get_project_rejects_mismatched_expected_org_scope(
+        self, async_client, auth_headers, db, test_project, test_user
+    ):
+        org_a = Organization(name="Org Scope A", owner_id=test_user.id, plan_type="free")
+        org_b = Organization(name="Org Scope B", owner_id=test_user.id, plan_type="free")
+        db.add_all([org_a, org_b])
+        db.commit()
+        db.refresh(org_a)
+        db.refresh(org_b)
+
+        test_project.organization_id = org_a.id
+        db.add(OrganizationMember(organization_id=org_a.id, user_id=test_user.id, role="owner"))
+        db.add(OrganizationMember(organization_id=org_b.id, user_id=test_user.id, role="owner"))
+        db.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{test_project.id}?expected_org_id={org_b.id}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        payload = response.json()
+        detail = payload["detail"]
+        assert detail["code"] == "PROJECT_ORG_SCOPE_MISMATCH"
+        assert detail["details"]["project_id"] == test_project.id
+        assert detail["details"]["expected_organization_id"] == org_b.id
+        assert detail["details"]["actual_organization_id"] == org_a.id
+
+    async def test_get_project_allows_matching_expected_org_scope(
+        self, async_client, auth_headers, db, test_project, test_user
+    ):
+        org = Organization(name="Scoped Project Org", owner_id=test_user.id, plan_type="free")
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+
+        test_project.organization_id = org.id
+        db.add(OrganizationMember(organization_id=org.id, user_id=test_user.id, role="owner"))
+        db.commit()
+
+        response = await async_client.get(
+            f"/api/v1/projects/{test_project.id}?expected_org_id={org.id}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        body = response.json()
+        assert body["id"] == test_project.id
+        assert body["organization_id"] == org.id
     
     async def test_get_nonexistent_project(self, async_client, auth_headers):
         """Test getting a project that doesn't exist"""

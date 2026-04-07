@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import useSWR from "swr";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import ProjectSettingsShell from "@/components/layout/ProjectSettingsShell";
 import { liveViewAPI, projectsAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
@@ -15,10 +15,16 @@ import { useOrgProjectParams } from "@/hooks/useOrgProjectParams";
 import { orgKeys } from "@/lib/queryKeys";
 import { deleteProject, revalidateOrganizationProjectLists } from "@/lib/orgProjectMutations";
 import { getProjectPermissionToast } from "@/lib/projectAccess";
+import {
+  buildCanonicalProjectPath,
+  getProjectScopeMismatchOrgId,
+} from "@/lib/projectRouteScope";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 export default function ProjectGeneralSettingsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const hasToken = useRequireAuth();
   const { mutate } = useSWRConfig();
@@ -37,10 +43,23 @@ export default function ProjectGeneralSettingsPage() {
   const loadProject = useCallback(async () => {
     if (!projectId || isNaN(projectId)) return;
     try {
-      const p = await projectsAPI.get(projectId);
+      const p = await projectsAPI.get(projectId, { expectedOrgId: orgId });
       setName(p.name ?? "");
       setDescription(p.description ?? "");
     } catch (e: any) {
+      const actualOrgId = getProjectScopeMismatchOrgId(e);
+      if (actualOrgId && pathname) {
+        router.replace(
+          buildCanonicalProjectPath(
+            pathname,
+            orgId,
+            actualOrgId,
+            projectId,
+            searchParams?.toString() ? `?${searchParams.toString()}` : ""
+          )
+        );
+        return;
+      }
       const status = e?.response?.status;
       if (status === 404) {
         showToast("This project no longer exists. Redirecting to projects list.", "info");
@@ -51,7 +70,7 @@ export default function ProjectGeneralSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, orgId, router, showToast]);
+  }, [pathname, projectId, orgId, router, searchParams, showToast]);
 
   useEffect(() => {
     if (!hasToken) return;
