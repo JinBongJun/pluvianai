@@ -80,6 +80,7 @@ export function ReleaseGateConfigPanelParityTab({
   } = m;
   const [openToolSchemas, setOpenToolSchemas] = React.useState<Record<string, boolean>>({});
   const [openToolTypeEditors, setOpenToolTypeEditors] = React.useState<Record<string, boolean>>({});
+  const [openToolHints, setOpenToolHints] = React.useState<Record<string, boolean>>({});
 
   const updateExpectedField = (
     toolId: string,
@@ -122,18 +123,8 @@ export function ReleaseGateConfigPanelParityTab({
     if (!tool) return;
     updateTool(toolId, {
       toolType: nextToolType,
-      expectedResultFields:
-        nextToolType === "retrieval"
-          ? tool.expectedResultFields?.length
-            ? tool.expectedResultFields
-            : [{ id: crypto.randomUUID(), name: "", description: "" }]
-          : tool.expectedResultFields ?? [],
-      expectedActionFields:
-        nextToolType === "action"
-          ? tool.expectedActionFields?.length
-            ? tool.expectedActionFields
-            : [{ id: crypto.randomUUID(), name: "", description: "" }]
-          : tool.expectedActionFields ?? [],
+      expectedResultFields: tool.expectedResultFields ?? [],
+      expectedActionFields: tool.expectedActionFields ?? [],
     });
   };
 
@@ -285,116 +276,6 @@ export function ReleaseGateConfigPanelParityTab({
                       </div>
                     ) : null}
 
-                    <div className="rounded-xl border border-white/10 bg-[#0f1115] p-4">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
-                            {toolType === "action" ? "Action payload" : "Returned fields"}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {toolType === "action"
-                              ? "List the fields this tool should send or create."
-                              : "List the fields this tool should return."}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => addExpectedField(tool.id, expectedFieldKey)}
-                          disabled={editsLocked}
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                        >
-                          <Plus className="w-3 h-3" />
-                          {toolType === "action" ? "Add payload field" : "Add returned field"}
-                        </button>
-                      </div>
-
-                      <div className="space-y-3">
-                        {expectedFields.length === 0 ? (
-                          <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-3 py-3 text-xs text-slate-500">
-                            {toolType === "action" ? "No action fields yet." : "No returned fields yet."}
-                          </div>
-                        ) : (
-                          expectedFields.map((field, fieldIndex) => (
-                            <div
-                              key={field.id}
-                              className="rounded-lg border border-white/10 bg-black/20 p-3"
-                            >
-                              <div className="mb-2 flex items-center justify-between gap-3">
-                                <div className="text-xs font-semibold text-slate-300">
-                                  Field {fieldIndex + 1}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeExpectedField(tool.id, expectedFieldKey, field.id)}
-                                  disabled={editsLocked || expectedFields.length === 1}
-                                  className="inline-flex items-center gap-1 rounded-lg border border-transparent px-2 py-1 text-[11px] font-medium text-rose-400/80 hover:bg-rose-500/10 hover:text-rose-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                  Remove
-                                </button>
-                              </div>
-                              <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                                <label className="space-y-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                                    Field name
-                                  </span>
-                                  <input
-                                    value={field.name}
-                                    onChange={e =>
-                                      updateExpectedField(tool.id, expectedFieldKey, field.id, {
-                                        name: e.target.value,
-                                      })
-                                    }
-                                    disabled={editsLocked}
-                                    placeholder={toolType === "action" ? "e.g. subject" : "e.g. temperature"}
-                                    className="w-full rounded-lg border border-white/10 bg-[#0a0c10] px-3 py-2 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-                                  />
-                                </label>
-                                <label className="space-y-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                                    Description
-                                  </span>
-                                  <input
-                                    value={field.description}
-                                    onChange={e =>
-                                      updateExpectedField(tool.id, expectedFieldKey, field.id, {
-                                        description: e.target.value,
-                                      })
-                                    }
-                                    disabled={editsLocked}
-                                    placeholder={
-                                      toolType === "action"
-                                        ? "What this field should contain"
-                                        : "What information this field should return"
-                                    }
-                                    className="w-full rounded-lg border border-white/10 bg-[#0a0c10] px-3 py-2 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
-                                  />
-                                </label>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-
-                      <label className="block space-y-2">
-                        <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
-                          Optional notes
-                        </span>
-                      <textarea
-                        value={tool.resultGuide ?? ""}
-                        onChange={e => updateTool(tool.id, { resultGuide: e.target.value })}
-                        disabled={editsLocked}
-                        spellCheck={false}
-                        placeholder={
-                          toolType === "action"
-                            ? "Add any extra guidance for this action."
-                            : "Add any extra guidance for this tool."
-                        }
-                        className="min-h-[72px] w-full rounded-xl border border-white/10 bg-[#0f1115] p-4 text-[13px] leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
-                      />
-                    </label>
-
                     <div className="rounded-xl border border-white/10 bg-[#0f1115]">
                       <button
                         type="button"
@@ -407,7 +288,9 @@ export function ReleaseGateConfigPanelParityTab({
                           <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
                             Inputs schema
                           </div>
-                          <div className="mt-1 text-xs text-slate-500">JSON schema</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            This controls what arguments the model can send to this tool.
+                          </div>
                         </div>
                         <div className="text-xs font-medium text-slate-400">
                           {schemaOpen ? "Hide" : "Show"}
@@ -427,6 +310,149 @@ export function ReleaseGateConfigPanelParityTab({
                               {parametersError}
                             </div>
                           )}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-[#0f1115]">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenToolHints(prev => ({ ...prev, [tool.id]: !(prev[tool.id] ?? false) }))
+                        }
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                      >
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                            Optional review hints
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            Add expected fields or notes only if they help you review this run.
+                          </div>
+                        </div>
+                        <div className="text-xs font-medium text-slate-400">
+                          {openToolHints[tool.id] ? "Hide" : "Show"}
+                        </div>
+                      </button>
+                      {openToolHints[tool.id] ? (
+                        <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-4">
+                          <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500">
+                                  {toolType === "action" ? "Action payload" : "Returned fields"}
+                                </div>
+                                <div className="mt-1 text-xs text-slate-500">
+                                  {toolType === "action"
+                                    ? "List the fields this tool should send or create."
+                                    : "List the fields this tool should return."}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => addExpectedField(tool.id, expectedFieldKey)}
+                                disabled={editsLocked}
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                              >
+                                <Plus className="w-3 h-3" />
+                                {toolType === "action" ? "Add payload field" : "Add returned field"}
+                              </button>
+                            </div>
+
+                            <div className="space-y-3">
+                              {expectedFields.length === 0 ? (
+                                <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-3 py-3 text-xs text-slate-500">
+                                  {toolType === "action"
+                                    ? "No action fields added."
+                                    : "No returned fields added."}
+                                </div>
+                              ) : (
+                                expectedFields.map((field, fieldIndex) => (
+                                  <div
+                                    key={field.id}
+                                    className="rounded-lg border border-white/10 bg-[#0a0c10] p-3"
+                                  >
+                                    <div className="mb-2 flex items-center justify-between gap-3">
+                                      <div className="text-xs font-semibold text-slate-300">
+                                        Field {fieldIndex + 1}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          removeExpectedField(tool.id, expectedFieldKey, field.id)
+                                        }
+                                        disabled={editsLocked}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-transparent px-2 py-1 text-[11px] font-medium text-rose-400/80 hover:bg-rose-500/10 hover:text-rose-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                        Remove
+                                      </button>
+                                    </div>
+                                    <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                                      <label className="space-y-2">
+                                        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+                                          Field name
+                                        </span>
+                                        <input
+                                          value={field.name}
+                                          onChange={e =>
+                                            updateExpectedField(tool.id, expectedFieldKey, field.id, {
+                                              name: e.target.value,
+                                            })
+                                          }
+                                          disabled={editsLocked}
+                                          placeholder={
+                                            toolType === "action"
+                                              ? "e.g. subject"
+                                              : "e.g. temperature"
+                                          }
+                                          className="w-full rounded-lg border border-white/10 bg-[#0f1115] px-3 py-2 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
+                                        />
+                                      </label>
+                                      <label className="space-y-2">
+                                        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+                                          Description
+                                        </span>
+                                        <input
+                                          value={field.description}
+                                          onChange={e =>
+                                            updateExpectedField(tool.id, expectedFieldKey, field.id, {
+                                              description: e.target.value,
+                                            })
+                                          }
+                                          disabled={editsLocked}
+                                          placeholder={
+                                            toolType === "action"
+                                              ? "What this field should contain"
+                                              : "What information this field should return"
+                                          }
+                                          className="w-full rounded-lg border border-white/10 bg-[#0f1115] px-3 py-2 text-sm text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all"
+                                        />
+                                      </label>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+
+                          <label className="block space-y-2">
+                            <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 block">
+                              Optional notes
+                            </span>
+                            <textarea
+                              value={tool.resultGuide ?? ""}
+                              onChange={e => updateTool(tool.id, { resultGuide: e.target.value })}
+                              disabled={editsLocked}
+                              spellCheck={false}
+                              placeholder={
+                                toolType === "action"
+                                  ? "Add any extra guidance for this action."
+                                  : "Add any extra guidance for this tool."
+                              }
+                              className="min-h-[72px] w-full rounded-xl border border-white/10 bg-[#0a0c10] p-4 text-[13px] leading-relaxed text-slate-200 outline-none focus:border-fuchsia-500/50 focus:ring-1 focus:ring-fuchsia-500/50 transition-all custom-scrollbar"
+                            />
+                          </label>
                         </div>
                       ) : null}
                     </div>
