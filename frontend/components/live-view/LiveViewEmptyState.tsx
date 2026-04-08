@@ -119,11 +119,11 @@ requests.post(
                 Live View Setup
               </p>
               <h2 className="text-3xl font-black leading-tight tracking-tight text-white drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] md:text-4xl">
-                Connect your app and see your first live node
+                Send one request and see your first live node
               </h2>
               <p className="mx-auto max-w-xl text-sm font-medium text-slate-400">
-                Send one request from your backend with SDK or HTTP. As soon as we receive it, your
-                first node will appear here automatically.
+                Add the SDK or HTTP snippet to your backend, send one test request, and Live View
+                will populate automatically.
               </p>
             </div>
           </div>
@@ -134,27 +134,27 @@ requests.post(
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400">
               Step 1
             </p>
-            <p className="mt-2 text-sm font-semibold text-white">Copy your project credentials</p>
+            <p className="mt-2 text-sm font-semibold text-white">Copy credentials</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-400">
-              Use your Project ID and server API key from Project Settings.
+              Get your Project ID and server API key from Project Settings.
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-[#121215]/70 px-5 py-4 shadow-xl">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400">
               Step 2
             </p>
-            <p className="mt-2 text-sm font-semibold text-white">Add one server-side snippet</p>
+            <p className="mt-2 text-sm font-semibold text-white">Add the snippet</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-400">
-              Paste the example into the part of your backend that sends requests to your model.
+              Paste it into the backend route or worker that calls your model.
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-[#121215]/70 px-5 py-4 shadow-xl">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-400">
               Step 3
             </p>
-            <p className="mt-2 text-sm font-semibold text-white">Send one test request</p>
+            <p className="mt-2 text-sm font-semibold text-white">Send one request</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-400">
-              Run a single request and come back here. Live View will update automatically.
+              Run one test call and come back here. Live View should update automatically.
             </p>
           </div>
         </section>
@@ -176,7 +176,7 @@ requests.post(
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Ingest endpoint
+                Ingest URL
               </p>
               <p className="mt-2 break-all text-sm font-semibold text-white">{ingestEndpoint}</p>
             </div>
@@ -189,7 +189,7 @@ requests.post(
               Send your first request
             </p>
             <p className="mt-1 text-xs font-medium text-slate-400">
-              Choose your stack and use this on the server where your app talks to the model.
+              Copy this into the backend route or worker that calls your model.
             </p>
           </div>
 
@@ -238,6 +238,7 @@ requests.post(
 
           <p className="px-6 pb-6 text-[11px] font-bold text-slate-500">
             After one successful request, your first live node should appear within a few seconds.
+            If not, refresh this page once.
           </p>
         </section>
 
@@ -247,18 +248,15 @@ requests.post(
             <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
           </summary>
           <ul className="mt-3 space-y-2 text-xs leading-relaxed text-slate-300">
-            <li>401 or 403: Make sure the Project ID and API key belong to the same project.</li>
-            <li>
-              Still empty after 1 minute: Confirm your backend sent a request to the ingest
-              endpoint.
-            </li>
-            <li>Using n8n, MCP, or LangChain: Open the integration guide below.</li>
+            <li>Check that the Project ID matches this project.</li>
+            <li>Check that your server API key belongs to the same project.</li>
+            <li>Check that your backend sent the request to the ingest URL.</li>
           </ul>
         </details>
 
         <section className="mx-auto max-w-xl rounded-[32px] border border-white/10 bg-[#121215]/60 p-6 shadow-2xl backdrop-blur-3xl">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Need a step-by-step guide?
+            Need setup help?
           </p>
           <Link
             href="/docs?section=integrations"
