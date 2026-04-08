@@ -159,6 +159,24 @@ $env:DATABASE_URL = "sqlite:///./test.db"
 $env:REDIS_URL = "redis://localhost:6379/0"
 ```
 
+### Backfill old deleted accounts
+
+If account deletion used to leave the original `email` or `google_id` behind, run the backfill once after deploy so those stale inactive rows stop blocking re-registration.
+
+Dry run:
+
+```powershell
+cd backend
+python scripts/backfill_deleted_user_identities.py
+```
+
+Apply:
+
+```powershell
+cd backend
+python scripts/backfill_deleted_user_identities.py --apply
+```
+
 ### Redis not available
 
 Tests are designed to run even without Redis. `CacheService` will automatically fall back or be disabled when Redis is not reachable.
