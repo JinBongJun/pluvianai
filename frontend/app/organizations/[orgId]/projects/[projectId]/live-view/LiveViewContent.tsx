@@ -408,7 +408,7 @@ export function LiveViewContent() {
             onRetry={() => void mutateAgents()}
           />
         )}
-        {showEmptyOverlay && <LiveViewEmptyState projectId={projectId} />}
+        {showEmptyOverlay && <LiveViewEmptyState projectId={projectId} orgId={orgId} />}
         {!showLoadingOverlay && !showAccessDeniedOverlay && !showApiErrorOverlay && (
           <LiveViewDeletedAgentsTray
             agents={deletedAgents}
