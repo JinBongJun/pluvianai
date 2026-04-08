@@ -43,7 +43,7 @@ export const authAPI = {
   },
 
   getGoogleOAuthStartUrl: (
-    intent: "login" | "signup" = "login",
+    intent: "login" | "signup" | "reauth_delete" = "login",
     options?: { next?: string; termsAccepted?: boolean }
   ) => {
     const params = new URLSearchParams();
