@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
@@ -1295,17 +1295,17 @@ export function AttemptDetailOverlay({
     toolContextGlobalText.length > 0 ||
     toolContextCustomEntries.length > 0;
   const toolContextSummary = (() => {
-    if (!hasToolContextDetails) return "No extra system text was added.";
+    if (!hasToolContextDetails) return "No extra context was added.";
     if (toolContextModeValue !== "inject") return "Using the recorded request only.";
     if (toolContextScopeValue === "global") {
       return toolContextGlobalText
-        ? "Shared extra system text was added for every replayed input."
-        : "Shared extra system text was configured for this run.";
+        ? "Shared extra context was added for every replayed input."
+        : "Shared extra context was configured for this run.";
     }
     const parts = [
-      `${toolContextCustomEntries.length} input${toolContextCustomEntries.length === 1 ? "" : "s"} received extra system text`,
+      `${toolContextCustomEntries.length} input${toolContextCustomEntries.length === 1 ? "" : "s"} received extra context`,
     ];
-    if (toolContextGlobalText) parts.push("with shared fallback text");
+    if (toolContextGlobalText) parts.push("with shared fallback context");
     return parts.join(", ");
   })();
   const toolContextScopeLabel =
@@ -1411,7 +1411,7 @@ export function AttemptDetailOverlay({
     if (replayOverrideCount > 0 || replayPerLogOverrideCount > 0) {
       rows.push({
         id: "extra-request",
-        label: "Additional request data",
+        label: "Extra request fields",
         summary:
           replayOverrideCount > 0 && replayPerLogOverrideCount > 0
             ? "Shared request data changed and some inputs use custom values"
@@ -1445,8 +1445,8 @@ export function AttemptDetailOverlay({
         label: "Extra system text",
         summary:
           toolContextScopeValue === "global"
-            ? "Shared system guidance was added for this run"
-            : `${toolContextCustomEntries.length} input${toolContextCustomEntries.length === 1 ? "" : "s"} received extra system guidance`,
+            ? "Shared context was added for this run"
+            : `${toolContextCustomEntries.length} input${toolContextCustomEntries.length === 1 ? "" : "s"} received extra context`,
         meta:
           toolContextModeValue === "inject"
             ? toolContextGlobalText
@@ -1543,6 +1543,92 @@ export function AttemptDetailOverlay({
     baselineResponse,
     candidateResponse,
   ]);
+  const primaryFailedSignal = failedSignals[0] ?? null;
+  const primaryFailureEvidence = primaryFailedSignal
+    ? formatSignalWhy(primaryFailedSignal.id, (signalsDetailsRaw as any)?.[primaryFailedSignal.id])
+    : pass
+      ? "No eval check failed for this attempt."
+      : "A failed check was detected, but detailed evidence was not captured.";
+  const primaryFailureMetric = primaryFailedSignal
+    ? formatSignalMetric(primaryFailedSignal.id, (signalsDetailsRaw as any)?.[primaryFailedSignal.id])
+    : null;
+  const primaryFailureFocus = primaryFailedSignal
+    ? diffFocusBySignal[primaryFailedSignal.id] || ""
+    : "";
+  const responseDiffSummary = (() => {
+    if (!primaryFailedSignal) {
+      return "Baseline and replay replies were captured for comparison.";
+    }
+    if (primaryFailedSignal.id === "length") {
+      return `Replay reply length changed from ${baselineLineCount} baseline line${baselineLineCount === 1 ? "" : "s"} to ${candidateLineCount} replay line${candidateLineCount === 1 ? "" : "s"}.`;
+    }
+    if (primaryFailedSignal.id === "repetition") {
+      return "Replay repeated content that did not appear in the baseline reply.";
+    }
+    if (primaryFailedSignal.id === "format" || primaryFailedSignal.id === "json") {
+      return "Replay changed the reply structure before the content itself.";
+    }
+    if (primaryFailedSignal.id === "required") {
+      return "Replay dropped information that was present in the baseline reply.";
+    }
+    if (primaryFailedSignal.id === "empty") {
+      return "Baseline had content, but replay came back empty or near-empty.";
+    }
+    return primaryFailureEvidence;
+  })();
+  const toolImpactSummary = (() => {
+    if (toolTotalCalls > 0) {
+      const matchedCount = toolExpectationRows.filter(row => row.missingFields.length === 0).length;
+      const detailParts = [
+        `${toolTotalCalls} tool call${toolTotalCalls === 1 ? "" : "s"} captured`,
+        toolExecutedCount > 0 ? `${toolExecutedCount} executed` : null,
+        toolRecordedCount > 0 ? `${toolRecordedCount} recorded` : null,
+        toolSimulatedCount > 0 ? `${toolSimulatedCount} simulated` : null,
+        toolResultCount > 0 ? `${toolResultCount} results` : null,
+        toolExpectationRows.length > 0
+          ? `${matchedCount}/${toolExpectationRows.length} setup item${toolExpectationRows.length === 1 ? "" : "s"} matched`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return {
+        title: "Tool impact",
+        summary:
+          toolGroundingStatus === "fail"
+            ? "Tool output did not ground into a stable final reply."
+            : "Tool calls were part of this attempt.",
+        detail: detailParts || toolEvidenceDetail,
+        toneClass:
+          toolGroundingStatus === "fail"
+            ? "border-rose-500/20 bg-rose-500/[0.05] text-rose-100"
+            : "border-cyan-500/20 bg-cyan-500/[0.06] text-cyan-100",
+      };
+    }
+    if (toolContextModeValue === "inject" || toolContextGlobalText || toolContextCustomEntries.length) {
+      return {
+        title: "Tool impact",
+        summary:
+          toolContextModeValue === "inject"
+            ? "Extra context was added to the replay."
+            : "No extra context was added.",
+        detail: toolContextSummary,
+        toneClass:
+          toolContextModeValue === "inject"
+            ? "border-cyan-500/20 bg-cyan-500/[0.06] text-cyan-100"
+            : "border-white/10 bg-white/[0.03] text-white/80",
+      };
+    }
+    if (toolExpectationRows.length > 0) {
+      const matchedCount = toolExpectationRows.filter(row => row.missingFields.length === 0).length;
+      return {
+        title: "Tool impact",
+        summary: "Tool setup was configured for this attempt.",
+        detail: `${matchedCount}/${toolExpectationRows.length} setup item${toolExpectationRows.length === 1 ? "" : "s"} matched the captured evidence.`,
+        toneClass: "border-cyan-500/20 bg-cyan-500/[0.06] text-cyan-100",
+      };
+    }
+    return null;
+  })();
   const diffExamplesBySignal = useMemo(() => {
     type DiffExample = { tone: "added" | "removed"; label: string; text: string };
     const repeatCandidateLine =
@@ -1635,6 +1721,29 @@ export function AttemptDetailOverlay({
                 </span>
               </div>
               <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">{decisionSummary}</p>
+              {!pass ? (
+                <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/[0.06] px-4 py-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-rose-200/80">
+                    Primary reason
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-white">
+                    {primaryFailedSignal?.label || "Failure reason unavailable"}
+                  </div>
+                  <div className="mt-2 text-[11px] leading-relaxed text-white/80">
+                    {primaryFailureEvidence}
+                  </div>
+                  {primaryFailureMetric ? (
+                    <div className="mt-2 text-[11px] font-medium text-white/40">
+                      {primaryFailureMetric}
+                    </div>
+                  ) : null}
+                  {primaryFailureFocus ? (
+                    <div className="mt-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-[11px] leading-relaxed text-white/55">
+                      {primaryFailureFocus}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
@@ -1812,14 +1921,14 @@ export function AttemptDetailOverlay({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-xs font-medium text-white/40">
-                          What changed from base
+                          What changed from baseline
                         </div>
                         <h3 className="mt-2 text-lg font-semibold text-white">
                           Input &amp; setup diff
                         </h3>
                       </div>
                       <div className="text-[11px] text-white/30">
-                        Review the exact replay input before reading eval results.
+                        Start with the failure reason, then compare the replay setup and reply.
                       </div>
                     </div>
                     <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
@@ -1852,11 +1961,24 @@ export function AttemptDetailOverlay({
                         <div className="mt-1 text-sm font-medium text-white">
                           {gateConfidence.label}
                         </div>
-                        <div className="mt-2 text-[11px] leading-relaxed text-white/80/80">
+                        <div className="mt-2 text-[11px] leading-relaxed text-white/80">
                           {gateConfidence.detail}
                         </div>
                       </div>
                     </div>
+                    {toolImpactSummary ? (
+                      <div className={clsx("mt-4 rounded-2xl border px-4 py-4", toolImpactSummary.toneClass)}>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
+                          {toolImpactSummary.title}
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-white">
+                          {toolImpactSummary.summary}
+                        </div>
+                        <div className="mt-2 text-[11px] leading-relaxed text-white/80">
+                          {toolImpactSummary.detail}
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="mt-4">
                       {inputChanged ? (
                         <div className="grid gap-4 xl:grid-cols-2">
@@ -2040,7 +2162,7 @@ export function AttemptDetailOverlay({
                           <div className="mt-1 text-sm font-medium text-white">
                             {actionOutcome.label}
                           </div>
-                          <div className="mt-2 text-[11px] leading-relaxed text-white/80/80">
+                          <div className="mt-2 text-[11px] leading-relaxed text-white/80">
                             {actionOutcome.detail}
                           </div>
                         </div>
@@ -2056,7 +2178,7 @@ export function AttemptDetailOverlay({
                           <div className="mt-1 text-sm font-medium text-white">
                             {finalReplyOutcome.label}
                           </div>
-                          <div className="mt-2 text-[11px] leading-relaxed text-white/80/80">
+                          <div className="mt-2 text-[11px] leading-relaxed text-white/80">
                             {finalReplyOutcome.detail}
                           </div>
                         </div>
@@ -2116,8 +2238,8 @@ export function AttemptDetailOverlay({
                   <section className="py-6 border-b border-white/5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-xs font-medium text-white/40">Evaluation results</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Eval scoreboard</h3>
+                        <div className="text-xs font-medium text-white/40">Detailed checks</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Check details</h3>
                       </div>
                       <div className="text-[11px] text-white/30">
                         All configured eval checks are shown below.
@@ -2325,13 +2447,11 @@ export function AttemptDetailOverlay({
                     </div>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-white/80">
-                          Compare baseline vs replay replies
-                        </p>
+                        <p className="text-sm font-semibold text-white/90">Reply comparison</p>
                         <p className="mt-1 text-[11px] text-white/30">{diffConfidenceMessage}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/40">
-                        <span>Green marks the changed replay output.</span>
+                        <span>Green marks lines added by the replay.</span>
                         {isResponseDiffCollapsible ? (
                           <button
                             type="button"
@@ -2365,10 +2485,18 @@ export function AttemptDetailOverlay({
                     </div>
                     {isToolDrivenAttempt ? (
                       <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3 text-[11px] leading-relaxed text-white/40">
-                        This section only compares the user-facing assistant reply. Review Action
-                        summary above if the main outcome happened through a tool call.
+                        This section only compares the user-facing assistant reply. Review the tool
+                        impact summary above if the main outcome happened through a tool call.
                       </div>
                     ) : null}
+                    <div className="mt-4 rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">
+                        Reply summary
+                      </div>
+                      <div className="mt-1 text-sm font-medium text-white">
+                        {responseDiffSummary}
+                      </div>
+                    </div>
                     {isResponseDiffCollapsible && !showFullResponseDiff ? (
                       <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3 text-[11px] leading-relaxed text-white/40">
                         Showing a shortened preview so long responses do not take over the review.
@@ -2674,7 +2802,7 @@ export function AttemptDetailOverlay({
                           {hasConfigurationChanges ? (
                             <details className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3">
                               <summary className="cursor-pointer list-none text-sm font-medium text-white/90 [&::-webkit-details-marker]:hidden">
-                                Additional request data
+                                Extra request fields
                                 <span className="ml-2 text-[11px] font-normal text-white/30">
                                   {replayOverrideCount > 0
                                     ? `${replayOverrideCount} shared field${replayOverrideCount === 1 ? "" : "s"}`
@@ -2695,7 +2823,7 @@ export function AttemptDetailOverlay({
                           {hasToolContextDetails ? (
                             <details className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3">
                               <summary className="cursor-pointer list-none text-sm font-medium text-white/90 [&::-webkit-details-marker]:hidden">
-                                Extra system guidance
+                                Extra context
                                 <span className="ml-2 text-[11px] font-normal text-white/30">
                                   {toolContextSummary}
                                 </span>
@@ -2708,7 +2836,7 @@ export function AttemptDetailOverlay({
                                     </div>
                                     <div className="mt-1 text-sm text-white/90">
                                       {toolContextModeValue === "inject"
-                                        ? "Add extra system guidance"
+                                        ? "Add extra context"
                                         : "Use the recorded request only"}
                                     </div>
                                   </div>
