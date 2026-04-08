@@ -2572,15 +2572,12 @@ export function AttemptDetailOverlay({
                     <div ref={detailsSectionRef} className="grid gap-5">
                       <section className="py-6 border-b border-white/5">
                         <div>
-                          <div className="text-xs font-medium text-white/40">
-                            Additional details
-                          </div>
+                        <div className="text-xs font-medium text-white/40">Extra details</div>
                           <h3 className="mt-2 text-lg font-semibold text-white">
-                            Extra review context
+                            More context
                           </h3>
                           <p className="mt-2 text-sm leading-6 text-white/60">
-                            Open these only when you need more setup context, tool evidence, or
-                            warnings.
+                            Open these only when you need setup details, tool evidence, or warnings.
                           </p>
                         </div>
                         <div className="mt-4 space-y-3">
@@ -2639,22 +2636,22 @@ export function AttemptDetailOverlay({
                             >
                               <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                  <div className="flex items-center gap-2 text-sm font-medium text-white/90">
-                                    <div className="h-1.5 w-1.5 rounded-full bg-amber-300/80" />
-                                    Tool execution details
+                                    <div className="flex items-center gap-2 text-sm font-medium text-white/90">
+                                      <div className="h-1.5 w-1.5 rounded-full bg-amber-300/80" />
+                                    Tool details
+                                    </div>
+                                    <p className="mt-2 text-[11px] leading-relaxed text-white/60">
+                                      {toolBehaviorSummary}
+                                    </p>
                                   </div>
-                                  <p className="mt-2 text-[11px] leading-relaxed text-white/60">
-                                    {toolBehaviorSummary}
-                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowToolBehaviorDetails(v => !v)}
+                                    className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/60 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                                  >
+                                  {showToolBehaviorDetails ? "Hide" : "Show"}
+                                  </button>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setShowToolBehaviorDetails(v => !v)}
-                                  className="rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/60 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                                >
-                                  {showToolBehaviorDetails ? "Hide details" : "Show details"}
-                                </button>
-                              </div>
                               <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-white/40">
                                 <span className="inline-flex rounded-md bg-white/5 px-2.5 py-1">
                                   Policy{" "}
@@ -2730,8 +2727,8 @@ export function AttemptDetailOverlay({
                                       {toolExpectationRows.map(row => {
                                         const label =
                                           row.toolType === "action"
-                                            ? "Payload fields"
-                                            : "Returned fields";
+                                            ? "Fields sent"
+                                            : "Fields returned";
                                         const matchedSummary =
                                           row.configuredFields.length > 0
                                             ? `Matched ${label.toLowerCase()} ${row.matchedFields.length}/${row.configuredFields.length}`
@@ -2755,7 +2752,7 @@ export function AttemptDetailOverlay({
                                             {row.baselineSampleSummary ? (
                                               <div className="mt-2 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.06] px-2.5 py-2 text-[10px] leading-relaxed text-emerald-100/90 whitespace-pre-wrap break-words">
                                                 <div className="mb-1 font-bold uppercase tracking-wider text-emerald-300/80">
-                                                  Baseline sample
+                                                  Baseline example
                                                 </div>
                                                 {row.baselineSampleSummary}
                                               </div>
@@ -2773,7 +2770,7 @@ export function AttemptDetailOverlay({
                                             {row.resultGuide ? (
                                               <div className="mt-2 text-[10px] leading-relaxed text-white/45">
                                                 <span className="font-semibold text-white/55">
-                                                  Extra notes:
+                                                  Notes:
                                                 </span>{" "}
                                                 {row.resultGuide}
                                               </div>
