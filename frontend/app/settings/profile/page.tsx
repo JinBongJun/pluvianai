@@ -162,11 +162,13 @@ export default function ProfileSettingsPage() {
     return `Active subscription found. Your plan remains active until ${parsed.toLocaleString()}. Account deletion becomes available after that date.`;
   }, [accountUsage?.current_period_end, hasBlockingSubscription]);
 
+  const deleteRequiresPassword = !!profile?.password_login_enabled;
+
   const canSubmitDeleteAccount =
     !deleteAccountBusy &&
     !hasBlockingSubscription &&
     deleteConfirmation.trim().toUpperCase() === "DELETE" &&
-    deletePassword.trim().length > 0;
+    (!deleteRequiresPassword || deletePassword.trim().length > 0);
 
   const handleSaveProfile = async () => {
     if (!canSaveName) return;
@@ -339,7 +341,7 @@ export default function ProfileSettingsPage() {
       setNotice(subscriptionDeletionNotice || "Active subscription found. Account deletion becomes available after the current billing period ends.");
       return;
     }
-    if (!deletePassword.trim()) {
+    if (deleteRequiresPassword && !deletePassword.trim()) {
       setNoticeTone("error");
       setNotice("Enter your password to delete this account.");
       return;
@@ -375,9 +377,6 @@ export default function ProfileSettingsPage() {
       } else if (code === "LAST_OWNER_OF_SHARED_ORG") {
         setNoticeTone("warning");
         setNotice("Transfer ownership of your shared organization before deleting your account.");
-      } else if (code === "GOOGLE_REAUTH_REQUIRED") {
-        setNoticeTone("warning");
-        setNotice("Google-only accounts cannot be deleted from self-serve settings yet.");
       } else if (code === "PASSWORD_CONFIRMATION_FAILED") {
         setNoticeTone("error");
         setNotice("Incorrect password. Please try again.");
@@ -669,17 +668,29 @@ export default function ProfileSettingsPage() {
               {subscriptionDeletionNotice}
             </div>
           ) : null}
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Current password</label>
-              <input
-                type="password"
-                value={deletePassword}
-                onChange={e => setDeletePassword(e.target.value)}
-                className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
-                placeholder="Current password"
-              />
+          {!deleteRequiresPassword ? (
+            <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
+              Google sign-in account detected. Account deletion will use your current signed-in session
+              plus the DELETE confirmation below.
             </div>
+          ) : null}
+          <div className="grid md:grid-cols-2 gap-4">
+            {deleteRequiresPassword ? (
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Current password</label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={e => setDeletePassword(e.target.value)}
+                  className="w-full rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
+                  placeholder="Current password"
+                />
+              </div>
+            ) : (
+              <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-400">
+                Password confirmation is not required for this Google sign-in account.
+              </div>
+            )}
             <div>
               <label className="block text-sm text-slate-400 mb-1">Type DELETE to confirm</label>
               <input
