@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Activity, ChevronDown, Copy } from "lucide-react";
 
 type StackOption = "python" | "node";
+type MethodOption = "sdk" | "http";
 
 export function LiveViewEmptyState({
   projectId,
@@ -15,22 +16,58 @@ export function LiveViewEmptyState({
   orgId?: string;
 }) {
   const [snippetCopied, setSnippetCopied] = useState(false);
-  const [copiedField, setCopiedField] = useState<"projectId" | "ingestUrl" | null>(null);
+  const [copiedField, setCopiedField] = useState<"projectId" | "apiUrl" | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<MethodOption>("sdk");
   const [selectedStack, setSelectedStack] = useState<StackOption>("python");
   const resolvedProjectId =
     projectId && !Number.isNaN(projectId) ? String(projectId) : "YOUR_PROJECT_ID";
-  const ingestEndpoint = `POST /api/v1/projects/${resolvedProjectId}/api-calls`;
+  const apiBaseUrl = "https://api.pluvianai.com";
   const settingsHref =
     orgId && resolvedProjectId !== "YOUR_PROJECT_ID"
       ? `/organizations/${orgId}/projects/${resolvedProjectId}/settings/api-keys`
       : "/docs?section=integrations";
 
-  const pythonSnippet = `import requests
+  const sdkInstallSnippet =
+    selectedStack === "python" ? "pip install pluvianai openai" : "npm install pluvianai openai";
+
+  const sdkEnvSnippet = `PLUVIANAI_API_KEY=ag_live_your_server_key
+PLUVIANAI_PROJECT_ID=${resolvedProjectId}
+PLUVIANAI_API_URL=${apiBaseUrl}
+PLUVIANAI_AGENT_NAME=quick-test`;
+
+  const pythonSdkSnippet = `import pluvianai
+from openai import OpenAI
+
+pluvianai.init()
+
+client = OpenAI()
+client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Hello!"}],
+)`;
+
+  const nodeSdkSnippet = `import pluvianai from "pluvianai";
+import OpenAI from "openai";
+
+pluvianai.init();
+
+const client = new OpenAI();
+
+async function main() {
+  await client.chat.completions.create({
+    model: "gpt-4",
+    messages: [{ role: "user", content: "Hello!" }],
+  });
+}
+
+main();`;
+
+  const pythonHttpSnippet = `import requests
 
 requests.post(
-  "https://api.pluvianai.com/api/v1/projects/${resolvedProjectId}/api-calls",
+  "${apiBaseUrl}/api/v1/projects/${resolvedProjectId}/api-calls",
   headers={
-    "Authorization": "Bearer YOUR_API_KEY",
+    "Authorization": "Bearer ag_live_your_server_key",
     "Content-Type": "application/json",
   },
   json={
@@ -47,27 +84,38 @@ requests.post(
   },
 )`;
 
-  const nodeSnippet = `await fetch("https://api.pluvianai.com/api/v1/projects/${resolvedProjectId}/api-calls", {
-  method: "POST",
-  headers: {
-    Authorization: "Bearer YOUR_API_KEY",
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    agent_name: "quick-test",
-    request_data: {
-      model: "gpt-4",
-      messages: [{ role: "user", content: "hello" }],
+  const nodeHttpSnippet = `async function sendTestRequest() {
+  await fetch("${apiBaseUrl}/api/v1/projects/${resolvedProjectId}/api-calls", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer ag_live_your_server_key",
+      "Content-Type": "application/json",
     },
-    response_data: {
-      choices: [{ message: { role: "assistant", content: "hello" } }],
-    },
-    latency_ms: 0,
-    status_code: 200,
-  }),
-});`;
+    body: JSON.stringify({
+      agent_name: "quick-test",
+      request_data: {
+        model: "gpt-4",
+        messages: [{ role: "user", content: "hello" }],
+      },
+      response_data: {
+        choices: [{ message: { role: "assistant", content: "hello" } }],
+      },
+      latency_ms: 0,
+      status_code: 200,
+    }),
+  });
+}
 
-  const snippet = selectedStack === "python" ? pythonSnippet : nodeSnippet;
+sendTestRequest();`;
+
+  const snippet =
+    selectedMethod === "sdk"
+      ? selectedStack === "python"
+        ? pythonSdkSnippet
+        : nodeSdkSnippet
+      : selectedStack === "python"
+        ? pythonHttpSnippet
+        : nodeHttpSnippet;
 
   const onCopy = useCallback(() => {
     navigator.clipboard.writeText(snippet).then(() => {
@@ -76,7 +124,7 @@ requests.post(
     });
   }, [snippet]);
 
-  const handleCopyField = useCallback((field: "projectId" | "ingestUrl", value: string) => {
+  const handleCopyField = useCallback((field: "projectId" | "apiUrl", value: string) => {
     navigator.clipboard.writeText(value).then(() => {
       setCopiedField(field);
       setTimeout(() => setCopiedField(current => (current === field ? null : current)), 2000);
@@ -140,8 +188,8 @@ requests.post(
                 Send one request and see your first live node
               </h2>
               <p className="mx-auto max-w-xl text-sm font-medium text-slate-400">
-                Add the SDK or HTTP snippet to your backend, send one test request, and Live View
-                will populate automatically.
+                Use the SDK for the fastest setup, or send events directly with Raw HTTP if you
+                need full control. After one real request, Live View will populate automatically.
               </p>
             </div>
           </div>
@@ -211,18 +259,18 @@ requests.post(
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                  Ingest URL
+                  API URL
                 </p>
                 <button
                   type="button"
-                  onClick={() => handleCopyField("ingestUrl", ingestEndpoint)}
+                  onClick={() => handleCopyField("apiUrl", apiBaseUrl)}
                   className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300 transition-colors hover:bg-white/10"
                 >
                   <Copy className="h-3 w-3" />
-                  {copiedField === "ingestUrl" ? "Copied" : "Copy"}
+                  {copiedField === "apiUrl" ? "Copied" : "Copy"}
                 </button>
               </div>
-              <p className="mt-2 break-all text-sm font-semibold text-white">{ingestEndpoint}</p>
+              <p className="mt-2 break-all text-sm font-semibold text-white">{apiBaseUrl}</p>
             </div>
           </div>
         </section>
@@ -230,14 +278,40 @@ requests.post(
         <section className="mx-auto w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/10 bg-[#121215]/60 text-left shadow-2xl backdrop-blur-3xl">
           <div className="px-6 pb-2 pt-6">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Send your first request
+              Integration method
             </p>
             <p className="mt-1 text-xs font-medium text-slate-400">
-              Copy this into the backend route or worker that calls your model.
+              SDK is the fastest path for most users. Raw HTTP is an advanced option that sends
+              events directly to the ingest API.
             </p>
           </div>
 
           <div className="mx-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedMethod("sdk")}
+              className={
+                selectedMethod === "sdk"
+                  ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
+                  : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
+              }
+            >
+              SDK
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedMethod("http")}
+              className={
+                selectedMethod === "http"
+                  ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
+                  : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
+              }
+            >
+              Raw HTTP (Advanced)
+            </button>
+          </div>
+
+          <div className="mx-4 mt-4 flex gap-2">
             <button
               type="button"
               onClick={() => setSelectedStack("python")}
@@ -262,7 +336,39 @@ requests.post(
             </button>
           </div>
 
-          <div className="relative mx-4 mb-4 mt-4 whitespace-pre-wrap rounded-[20px] border border-white/5 bg-black/60 p-5 font-mono text-xs text-emerald-300/90">
+          {selectedMethod === "sdk" ? (
+            <div className="mx-4 mt-4 grid gap-4">
+              <div className="rounded-[20px] border border-white/5 bg-black/30 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  1. Add these to .env
+                </p>
+                <pre className="mt-3 whitespace-pre-wrap font-mono text-xs text-emerald-300/90">
+                  {sdkEnvSnippet}
+                </pre>
+              </div>
+              <div className="rounded-[20px] border border-white/5 bg-black/30 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  2. Install the packages
+                </p>
+                <pre className="mt-3 whitespace-pre-wrap font-mono text-xs text-emerald-300/90">
+                  {sdkInstallSnippet}
+                </pre>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="px-6 pb-2 pt-6">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {selectedMethod === "sdk" ? "3. Add this to your app" : "Send your first request"}
+            </p>
+            <p className="mt-1 text-xs font-medium text-slate-400">
+              {selectedMethod === "sdk"
+                ? "Put this near app startup so it runs before your first model call."
+                : "Use a server API key with ingest access and send this from your backend."}
+            </p>
+          </div>
+
+          <div className="relative mx-4 mb-4 mt-2 whitespace-pre-wrap rounded-[20px] border border-white/5 bg-black/60 p-5 font-mono text-xs text-emerald-300/90">
             <button
               type="button"
               onClick={onCopy}
@@ -281,8 +387,9 @@ requests.post(
           </div>
 
           <p className="px-6 pb-6 text-[11px] font-bold text-slate-500">
-            After one successful request, your first live node should appear within a few seconds.
-            If not, refresh this page once.
+            {selectedMethod === "sdk"
+              ? "After you add the SDK and run one real model call, your first live node should appear within a few seconds. If not, refresh this page once."
+              : "After one successful ingest request, your first live node should appear within a few seconds. If not, refresh this page once."}
           </p>
         </section>
 
@@ -294,7 +401,11 @@ requests.post(
           <ul className="mt-3 space-y-2 text-xs leading-relaxed text-slate-300">
             <li>Check that the Project ID matches this project.</li>
             <li>Check that your server API key belongs to the same project.</li>
-            <li>Check that your backend sent the request to the ingest URL.</li>
+            <li>
+              {selectedMethod === "sdk"
+                ? "Check that pluvianai.init() runs before your first real model call."
+                : "Check that your server API key has ingest access."}
+            </li>
           </ul>
         </details>
 
