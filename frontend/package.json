@@ -37,7 +37,7 @@
     "next": "14.0.3",
     "playwright": "^1.58.2",
     "postcss": "^8.4.32",
-    "posthog-js": "^1.328.0",
+    "posthog-js": "^1.365.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
