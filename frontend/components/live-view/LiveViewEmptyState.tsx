@@ -275,122 +275,194 @@ sendTestRequest();`;
           </div>
         </section>
 
-        <section className="mx-auto w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/10 bg-[#121215]/60 text-left shadow-2xl backdrop-blur-3xl">
-          <div className="px-6 pb-2 pt-6">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Integration method
-            </p>
-            <p className="mt-1 text-xs font-medium text-slate-400">
-              SDK is the fastest path for most users. Raw HTTP is an advanced option that sends
-              events directly to the ingest API.
-            </p>
-          </div>
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)] xl:items-start">
+          <div className="overflow-hidden rounded-[32px] border border-white/10 bg-[#121215]/60 text-left shadow-2xl backdrop-blur-3xl">
+            <div className="px-6 pb-2 pt-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Integration method
+              </p>
+              <p className="mt-1 text-xs font-medium text-slate-400">
+                SDK is the fastest path for most users. Raw HTTP is an advanced option that sends
+                events directly to the ingest API.
+              </p>
+            </div>
 
-          <div className="mx-4 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedMethod("sdk")}
-              className={
-                selectedMethod === "sdk"
-                  ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
-                  : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
-              }
-            >
-              SDK
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedMethod("http")}
-              className={
-                selectedMethod === "http"
-                  ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
-                  : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
-              }
-            >
-              Raw HTTP (Advanced)
-            </button>
-          </div>
+            <div className="mx-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedMethod("sdk")}
+                className={
+                  selectedMethod === "sdk"
+                    ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
+                    : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
+                }
+              >
+                SDK
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedMethod("http")}
+                className={
+                  selectedMethod === "http"
+                    ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
+                    : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
+                }
+              >
+                Raw HTTP (Advanced)
+              </button>
+            </div>
 
-          <div className="mx-4 mt-4 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedStack("python")}
-              className={
-                selectedStack === "python"
-                  ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
-                  : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
-              }
-            >
-              Python
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedStack("node")}
-              className={
-                selectedStack === "node"
-                  ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
-                  : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
-              }
-            >
-              Node
-            </button>
-          </div>
+            <div className="mx-4 mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedStack("python")}
+                className={
+                  selectedStack === "python"
+                    ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
+                    : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
+                }
+              >
+                Python
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStack("node")}
+                className={
+                  selectedStack === "node"
+                    ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
+                    : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
+                }
+              >
+                Node
+              </button>
+            </div>
 
-          {selectedMethod === "sdk" ? (
-            <div className="mx-4 mt-4 grid gap-4">
-              <div className="rounded-[20px] border border-white/5 bg-black/30 p-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                  1. Add these to .env
-                </p>
-                <pre className="mt-3 whitespace-pre-wrap font-mono text-xs text-emerald-300/90">
-                  {sdkEnvSnippet}
-                </pre>
+            {selectedMethod === "sdk" ? (
+              <div className="mx-4 mt-4 grid gap-4">
+                <div className="rounded-[20px] border border-white/5 bg-black/30 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    1. Add these to .env
+                  </p>
+                  <pre className="mt-3 whitespace-pre-wrap font-mono text-xs text-emerald-300/90">
+                    {sdkEnvSnippet}
+                  </pre>
+                </div>
+                <div className="rounded-[20px] border border-white/5 bg-black/30 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    2. Install the packages
+                  </p>
+                  <pre className="mt-3 whitespace-pre-wrap font-mono text-xs text-emerald-300/90">
+                    {sdkInstallSnippet}
+                  </pre>
+                </div>
               </div>
-              <div className="rounded-[20px] border border-white/5 bg-black/30 p-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                  2. Install the packages
+            ) : null}
+
+            <div className="px-6 pb-2 pt-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                {selectedMethod === "sdk" ? "3. Add this to your app" : "Send your first request"}
+              </p>
+              <p className="mt-1 text-xs font-medium text-slate-400">
+                {selectedMethod === "sdk"
+                  ? "Put this near app startup so it runs before your first model call."
+                  : "Use a server API key with ingest access and send this from your backend."}
+              </p>
+            </div>
+
+            <div className="relative mx-4 mb-4 mt-2 whitespace-pre-wrap rounded-[20px] border border-white/5 bg-black/60 p-5 font-mono text-xs text-emerald-300/90">
+              <button
+                type="button"
+                onClick={onCopy}
+                className="absolute right-3 top-3 rounded-xl border border-white/10 bg-white/5 p-2 text-emerald-400 transition-all hover:bg-white/10 active:scale-95"
+                title="Copy snippet"
+                aria-label="Copy snippet"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+              {snippetCopied ? (
+                <span className="absolute right-12 top-3 text-[10px] font-bold uppercase text-emerald-400">
+                  Copied
+                </span>
+              ) : null}
+              {snippet}
+            </div>
+
+            <p className="px-6 pb-6 text-[11px] font-bold text-slate-500">
+              {selectedMethod === "sdk"
+                ? "After you add the SDK and run one real model call, your first live node should appear within a few seconds. If not, refresh this page once."
+                : "After one successful ingest request, your first live node should appear within a few seconds. If not, refresh this page once."}
+            </p>
+          </div>
+
+          <aside className="rounded-[32px] border border-white/10 bg-[#121215]/60 p-5 text-left shadow-2xl backdrop-blur-3xl xl:sticky xl:top-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Sample node preview
                 </p>
-                <pre className="mt-3 whitespace-pre-wrap font-mono text-xs text-emerald-300/90">
-                  {sdkInstallSnippet}
-                </pre>
+                <p className="mt-1 text-xs font-medium text-slate-400">
+                  Example only. Your real node will appear here after one successful request.
+                </p>
+              </div>
+              <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">
+                Sample
+              </span>
+            </div>
+
+            <div className="mt-5 rounded-[28px] border border-emerald-500/15 bg-black/35 p-4 shadow-[0_0_40px_rgba(16,185,129,0.06)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-white">quick-test</p>
+                  <p className="text-xs text-slate-400">OpenAI · gpt-4</p>
+                </div>
+                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">
+                  Healthy
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    Latency
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-white">182 ms</p>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    Status
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-white">200</p>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    Messages
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-white">2</p>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    Tool calls
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-white">0</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  Example flow
+                </p>
+                <div className="mt-3 flex items-center gap-2 overflow-hidden">
+                  <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+                    User
+                  </div>
+                  <div className="h-px flex-1 bg-gradient-to-r from-cyan-400/40 to-emerald-400/40" />
+                  <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">
+                    quick-test
+                  </div>
+                </div>
               </div>
             </div>
-          ) : null}
-
-          <div className="px-6 pb-2 pt-6">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              {selectedMethod === "sdk" ? "3. Add this to your app" : "Send your first request"}
-            </p>
-            <p className="mt-1 text-xs font-medium text-slate-400">
-              {selectedMethod === "sdk"
-                ? "Put this near app startup so it runs before your first model call."
-                : "Use a server API key with ingest access and send this from your backend."}
-            </p>
-          </div>
-
-          <div className="relative mx-4 mb-4 mt-2 whitespace-pre-wrap rounded-[20px] border border-white/5 bg-black/60 p-5 font-mono text-xs text-emerald-300/90">
-            <button
-              type="button"
-              onClick={onCopy}
-              className="absolute right-3 top-3 rounded-xl border border-white/10 bg-white/5 p-2 text-emerald-400 transition-all hover:bg-white/10 active:scale-95"
-              title="Copy snippet"
-              aria-label="Copy snippet"
-            >
-              <Copy className="h-4 w-4" />
-            </button>
-            {snippetCopied ? (
-              <span className="absolute right-12 top-3 text-[10px] font-bold uppercase text-emerald-400">
-                Copied
-              </span>
-            ) : null}
-            {snippet}
-          </div>
-
-          <p className="px-6 pb-6 text-[11px] font-bold text-slate-500">
-            {selectedMethod === "sdk"
-              ? "After you add the SDK and run one real model call, your first live node should appear within a few seconds. If not, refresh this page once."
-              : "After one successful ingest request, your first live node should appear within a few seconds. If not, refresh this page once."}
-          </p>
+          </aside>
         </section>
 
         <details className="group mx-auto w-full max-w-3xl rounded-2xl border border-white/10 bg-black/30 px-5 py-4 text-left">
