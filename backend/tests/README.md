@@ -6,15 +6,36 @@ This directory contains tests for the PluvianAI backend (FastAPI).
 
 ## 🚀 Quick start
 
-### 1. Set up the test environment
+### 1. Use Python 3.11
+
+The backend test environment is currently standardized on **Python 3.11**.
+
+- `backend/.venv` should be created with Python 3.11.
+- Python 3.14 is not a supported test runtime for this repo today. We verified local failures there from pinned dependencies and import compatibility, including `psycopg2-binary==2.9.9`, `spacy==3.7.2`, and `sqlalchemy==2.0.23` from [`requirements.txt`](../requirements.txt) and [`pyproject.toml`](../pyproject.toml).
+
+### 2. Set up the test environment
 
 ```bash
 cd backend
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 pip install -r requirements-test.txt
 ```
 
-### 2. Run tests
+PowerShell:
+
+```powershell
+cd backend
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-test.txt
+```
+
+If `backend/.venv` was created with a Python executable that no longer exists, recreate it. A broken `pyvenv.cfg` will cause `pytest.exe` and other launchers to fail before tests even start.
+
+### 3. Run tests
 
 ```bash
 # Run all tests
@@ -129,6 +150,13 @@ Make sure test environment variables are set, for example:
 ```bash
 export DATABASE_URL=sqlite:///:memory:
 export REDIS_URL=redis://localhost:6379/0
+```
+
+On PowerShell:
+
+```powershell
+$env:DATABASE_URL = "sqlite:///./test.db"
+$env:REDIS_URL = "redis://localhost:6379/0"
 ```
 
 ### Redis not available

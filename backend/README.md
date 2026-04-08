@@ -78,6 +78,8 @@ python -m alembic check
 
 ### Tests
 
+Use **Python 3.11** for backend development and test runs. The current dependency set is not validated on Python 3.14, and local test setup may fail there because some pinned packages do not provide compatible wheels.
+
 ```bash
 cd backend
 python -m pytest -c pytest-ci.ini
