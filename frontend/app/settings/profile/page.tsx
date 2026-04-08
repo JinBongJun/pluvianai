@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { authAPI, settingsAPI } from "@/lib/api";
 import { clearFrontendAuthSession } from "@/lib/api/client";
@@ -20,6 +20,7 @@ type UserProfile = {
   primary_auth_provider: string;
   password_login_enabled: boolean;
   google_login_enabled: boolean;
+  has_recent_google_delete_reauth?: boolean;
   created_at: string;
 };
 
@@ -49,6 +50,7 @@ type AccountUsage = {
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [apiKeys, setApiKeys] = useState<UserApiKey[]>([]);
@@ -163,12 +165,22 @@ export default function ProfileSettingsPage() {
   }, [accountUsage?.current_period_end, hasBlockingSubscription]);
 
   const deleteRequiresPassword = !!profile?.password_login_enabled;
+  const hasRecentGoogleDeleteReauth = !!profile?.has_recent_google_delete_reauth;
 
   const canSubmitDeleteAccount =
     !deleteAccountBusy &&
     !hasBlockingSubscription &&
     deleteConfirmation.trim().toUpperCase() === "DELETE" &&
-    (!deleteRequiresPassword || deletePassword.trim().length > 0);
+    (deleteRequiresPassword
+      ? deletePassword.trim().length > 0
+      : hasRecentGoogleDeleteReauth);
+
+  useEffect(() => {
+    const oauthError = searchParams?.get("oauth_error_message");
+    if (!oauthError) return;
+    setNoticeTone("warning");
+    setNotice(oauthError);
+  }, [searchParams]);
 
   const handleSaveProfile = async () => {
     if (!canSaveName) return;
@@ -346,6 +358,11 @@ export default function ProfileSettingsPage() {
       setNotice("Enter your password to delete this account.");
       return;
     }
+    if (!deleteRequiresPassword && !hasRecentGoogleDeleteReauth) {
+      setNoticeTone("warning");
+      setNotice("Confirm this deletion with Google first, then try again.");
+      return;
+    }
     if (deleteConfirmation.trim().toUpperCase() !== "DELETE") {
       setNoticeTone("error");
       setNotice("Type DELETE to confirm account deletion.");
@@ -377,6 +394,9 @@ export default function ProfileSettingsPage() {
       } else if (code === "LAST_OWNER_OF_SHARED_ORG") {
         setNoticeTone("warning");
         setNotice("Transfer ownership of your shared organization before deleting your account.");
+      } else if (code === "GOOGLE_REAUTH_REQUIRED") {
+        setNoticeTone("warning");
+        setNotice("Confirm this deletion with Google again, then retry within 10 minutes.");
       } else if (code === "PASSWORD_CONFIRMATION_FAILED") {
         setNoticeTone("error");
         setNotice("Incorrect password. Please try again.");
@@ -670,8 +690,9 @@ export default function ProfileSettingsPage() {
           ) : null}
           {!deleteRequiresPassword ? (
             <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
-              Google sign-in account detected. Account deletion will use your current signed-in session
-              plus the DELETE confirmation below.
+              {hasRecentGoogleDeleteReauth
+                ? "Google deletion check complete. You can delete this account for the next 10 minutes."
+                : "Google sign-in account detected. Confirm with Google first, then return here to finish deletion."}
             </div>
           ) : null}
           <div className="grid md:grid-cols-2 gap-4">
@@ -705,6 +726,18 @@ export default function ProfileSettingsPage() {
             <Button variant="danger" onClick={handleDeleteAccount} disabled={!canSubmitDeleteAccount}>
               {deleteAccountBusy ? "Deleting..." : "Delete account"}
             </Button>
+            {!deleteRequiresPassword && !hasRecentGoogleDeleteReauth ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  window.location.href = authAPI.getGoogleOAuthStartUrl("reauth_delete", {
+                    next: "/settings/profile",
+                  });
+                }}
+              >
+                Verify with Google
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={() => router.push("/settings/billing")}>
               Open billing
             </Button>

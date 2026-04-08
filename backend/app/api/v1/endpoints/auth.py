@@ -32,6 +32,10 @@ from app.services.subscription_service import SubscriptionService
 from app.services.entitlement_service import EntitlementService
 from app.services.email_verification_service import EmailVerificationService
 from app.services.google_oauth_service import GoogleOAuthService, OAUTH_STATE_COOKIE_NAME
+from app.core.google_reauth import (
+    clear_google_delete_reauth_cookie,
+    set_google_delete_reauth_cookie,
+)
 from app.core.security import (
     verify_password,
     get_password_hash,
@@ -530,7 +534,7 @@ async def google_oauth_start(
             detail="Google sign-in is not configured.",
         )
 
-    normalized_intent = intent if intent in {"login", "signup"} else "login"
+    normalized_intent = intent if intent in {"login", "signup", "reauth_delete"} else "login"
     state_token = service.create_state_token(
         intent=normalized_intent,
         next_path=_safe_next_path(next),
@@ -578,7 +582,9 @@ async def google_oauth_callback(
     if state_error or not state_payload:
         return _error_redirect("Google sign-in state is invalid. Please try again.")
 
-    signup_intent = state_payload.get("intent") == "signup"
+    intent = str(state_payload.get("intent") or "login")
+    signup_intent = intent == "signup"
+    reauth_delete_intent = intent == "reauth_delete"
     next_path = _safe_next_path(state_payload.get("next_path"))
     terms_accepted = bool(state_payload.get("terms_accepted"))
 
@@ -587,6 +593,20 @@ async def google_oauth_callback(
     except Exception as exc:
         logger.warning("Google OAuth callback failed", exc_info=True)
         return _error_redirect("Google sign-in could not be completed.")
+
+    session_user = None
+    if reauth_delete_intent:
+        access_token = request.cookies.get(ACCESS_COOKIE_NAME)
+        payload = decode_token(access_token) if access_token else None
+        session_user_id = payload.get("sub") if payload else None
+        if session_user_id is not None:
+            session_user = db.query(User).filter(User.id == int(session_user_id)).first()
+
+        if not session_user or not session_user.is_active:
+            params = {"oauth_error": "1", "oauth_error_message": "Sign in again before confirming Google account deletion."}
+            redirect = _redirect_to_frontend(f"{next_path}?{urlencode(params)}")
+            _clear_oauth_state_cookie(redirect)
+            return redirect
 
     user = db.query(User).filter(User.google_id == identity.google_id).first()
     created = False
@@ -628,6 +648,16 @@ async def google_oauth_callback(
     if not user.is_active:
         return _error_redirect("This account is inactive. Contact support if you need access.")
 
+    if reauth_delete_intent:
+        if session_user is None or user.id != session_user.id or not bool(getattr(user, "google_login_enabled", False)):
+            params = {
+                "oauth_error": "1",
+                "oauth_error_message": "Use the same Google account that is linked to this profile before deleting it.",
+            }
+            redirect = _redirect_to_frontend(f"{next_path}?{urlencode(params)}")
+            _clear_oauth_state_cookie(redirect)
+            return redirect
+
     user.is_email_verified = True
     if not user.full_name and identity.full_name:
         user.full_name = identity.full_name
@@ -650,6 +680,8 @@ async def google_oauth_callback(
     redirect = _redirect_to_frontend(next_path)
     _clear_oauth_state_cookie(redirect)
     _issue_session_for_user(redirect, user, db)
+    if reauth_delete_intent:
+        set_google_delete_reauth_cookie(redirect, user.id)
 
     try:
         if created:
@@ -1021,6 +1053,7 @@ async def logout(
     _csrf: None = Depends(require_csrf_for_cookie_auth),
 ):
     _clear_auth_cookies(response)
+    clear_google_delete_reauth_cookie(response)
     response.status_code = status.HTTP_204_NO_CONTENT
     return None
 

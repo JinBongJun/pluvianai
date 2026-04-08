@@ -17,6 +17,11 @@ from app.core.security import (
     get_password_hash,
     require_csrf_for_cookie_auth,
 )
+from app.core.google_reauth import (
+    GOOGLE_DELETE_REAUTH_COOKIE_NAME,
+    clear_google_delete_reauth_cookie,
+    has_valid_google_delete_reauth_token,
+)
 from app.core.decorators import handle_errors
 from app.core.logging_config import logger
 from app.core.responses import success_response
@@ -43,6 +48,7 @@ class ProfileResponse(BaseModel):
     primary_auth_provider: str = "password"
     password_login_enabled: bool = True
     google_login_enabled: bool = False
+    has_recent_google_delete_reauth: bool = False
     created_at: str
 
 class UpdateProfileRequest(BaseModel):
@@ -143,6 +149,7 @@ def _clear_auth_cookies(response: Response) -> None:
 @router.get("/profile", response_model=ProfileResponse)
 @handle_errors
 async def get_profile(
+    request: Request,
     current_user: User = Depends(get_current_user),
 ):
     """Get current user profile"""
@@ -157,6 +164,10 @@ async def get_profile(
         primary_auth_provider=str(getattr(current_user, "primary_auth_provider", "password")),
         password_login_enabled=bool(getattr(current_user, "password_login_enabled", True)),
         google_login_enabled=bool(getattr(current_user, "google_login_enabled", False)),
+        has_recent_google_delete_reauth=has_valid_google_delete_reauth_token(
+            request.cookies.get(GOOGLE_DELETE_REAUTH_COOKIE_NAME),
+            int(current_user.id),
+        ),
         created_at=current_user.created_at.isoformat() if current_user.created_at else "",
     )
 
@@ -165,6 +176,7 @@ async def get_profile(
 @handle_errors
 async def update_profile(
     request: UpdateProfileRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     _csrf: None = Depends(require_csrf_for_cookie_auth),
     db: Session = Depends(get_db),
@@ -190,6 +202,10 @@ async def update_profile(
         primary_auth_provider=str(getattr(current_user, "primary_auth_provider", "password")),
         password_login_enabled=bool(getattr(current_user, "password_login_enabled", True)),
         google_login_enabled=bool(getattr(current_user, "google_login_enabled", False)),
+        has_recent_google_delete_reauth=has_valid_google_delete_reauth_token(
+            http_request.cookies.get(GOOGLE_DELETE_REAUTH_COOKIE_NAME),
+            int(current_user.id),
+        ),
         created_at=current_user.created_at.isoformat() if current_user.created_at else "",
     )
 
@@ -218,6 +234,10 @@ async def delete_account(
         )
 
     should_verify_password = bool(getattr(current_user, "password_login_enabled", True))
+    has_recent_google_delete_reauth = has_valid_google_delete_reauth_token(
+        http_request.cookies.get(GOOGLE_DELETE_REAUTH_COOKIE_NAME),
+        int(current_user.id),
+    )
 
     # Verify password for accounts that support password sign-in.
     if should_verify_password and not verify_password(request.password, current_user.hashed_password):
@@ -226,6 +246,14 @@ async def delete_account(
             detail={
                 "code": "PASSWORD_CONFIRMATION_FAILED",
                 "message": "Invalid password.",
+            },
+        )
+    if not should_verify_password and not has_recent_google_delete_reauth:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "GOOGLE_REAUTH_REQUIRED",
+                "message": "Confirm this deletion with Google again, then retry within 10 minutes.",
             },
         )
 
@@ -253,6 +281,7 @@ async def delete_account(
         logger.warning("Failed to log account deletion audit event", exc_info=True)
 
     _clear_auth_cookies(response)
+    clear_google_delete_reauth_cookie(response)
     
     logger.info(f"Account deleted for user {current_user.id}")
     return None

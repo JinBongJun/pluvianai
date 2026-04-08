@@ -1,5 +1,6 @@
 import pytest
 from fastapi import status
+from app.core.google_reauth import create_google_delete_reauth_token
 from app.models.email_verification_token import EmailVerificationToken
 from app.models.api_key import APIKey
 from app.models.organization import Organization, OrganizationMember
@@ -212,7 +213,7 @@ class TestSettingsProfileAndApiKeys:
         detail = response.json().get("error") or response.json().get("detail") or {}
         assert "subscription" in str(detail).lower()
 
-    async def test_h8b_google_only_account_can_delete_with_session_confirmation(
+    async def test_h8b_google_only_account_requires_recent_google_reauth_to_delete(
         self, async_client, auth_headers, test_user, db
     ):
         org = Organization(name="Google Solo Org", owner_id=test_user.id, plan_type="free")
@@ -238,10 +239,24 @@ class TestSettingsProfileAndApiKeys:
         db.add(test_user)
         db.commit()
 
-        response = await async_client.delete(
+        blocked_response = await async_client.delete(
             "/api/v1/settings/profile",
             json={"password": "", "confirmation_text": "DELETE"},
             headers=auth_headers,
+        )
+
+        assert blocked_response.status_code == status.HTTP_400_BAD_REQUEST
+        blocked_detail = blocked_response.json().get("error") or blocked_response.json().get("detail") or {}
+        assert "google" in str(blocked_detail).lower()
+
+        reauth_token = create_google_delete_reauth_token(test_user.id)
+        response = await async_client.delete(
+            "/api/v1/settings/profile",
+            json={"password": "", "confirmation_text": "DELETE"},
+            headers={
+                **auth_headers,
+                "Cookie": f"google_delete_reauth={reauth_token}",
+            },
         )
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
