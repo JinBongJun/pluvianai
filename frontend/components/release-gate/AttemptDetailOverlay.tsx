@@ -1543,8 +1543,9 @@ export function AttemptDetailOverlay({
     baselineResponse,
     candidateResponse,
   ]);
-  const primaryFailedSignal = failedSignals[0] ?? null;
   const responseRelatedSignals = new Set(["length", "repetition", "format", "json", "required", "empty"]);
+  const primaryFailedSignal =
+    failedSignals.find(row => responseRelatedSignals.has(row.id)) ?? failedSignals[0] ?? null;
   const primaryFailureEvidence = primaryFailedSignal
     ? formatSignalWhy(primaryFailedSignal.id, (signalsDetailsRaw as any)?.[primaryFailedSignal.id])
     : pass
@@ -2044,9 +2045,9 @@ export function AttemptDetailOverlay({
                         inputSetupRows.map((row, idx) => {
                           const actionLabel =
                             row.action === "tools"
-                              ? "View tool details"
+                          ? "Open tool details"
                               : row.action === "details"
-                                ? "View details"
+                                ? "Jump to details"
                                 : null;
                           const Container = row.action ? "button" : "div";
                           return (
