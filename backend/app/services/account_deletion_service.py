@@ -24,19 +24,55 @@ class AccountDeletionBlocked(Exception):
 
 
 class AccountDeletionService:
+    DELETED_EMAIL_PREFIX = "deleted-user-"
+    DELETED_EMAIL_DOMAIN = "@deleted.local"
+    DELETED_GOOGLE_PREFIX = "deleted-google-"
+
     def __init__(self, db: Session):
         self.db = db
 
     def _utcnow(self) -> datetime:
         return datetime.now(timezone.utc)
 
-    def _tombstone_user_identity(self, user: User, now: datetime) -> None:
+    @classmethod
+    def is_tombstoned_email(cls, email: str | None) -> bool:
+        value = str(email or "")
+        return value.startswith(cls.DELETED_EMAIL_PREFIX) and value.endswith(cls.DELETED_EMAIL_DOMAIN)
+
+    @classmethod
+    def is_tombstoned_google_id(cls, google_id: str | None) -> bool:
+        return str(google_id or "").startswith(cls.DELETED_GOOGLE_PREFIX)
+
+    def _tombstone_user_identity(self, user: User, now: datetime) -> bool:
         ts = int(now.timestamp())
-        user.email = f"deleted-user-{user.id}-{ts}@deleted.local"
-        if user.google_id:
-            user.google_id = f"deleted-google-{user.id}-{ts}"
-        user.google_login_enabled = False
-        user.password_login_enabled = False
+        changed = False
+
+        if not self.is_tombstoned_email(user.email):
+            user.email = f"{self.DELETED_EMAIL_PREFIX}{user.id}-{ts}{self.DELETED_EMAIL_DOMAIN}"
+            changed = True
+        if user.google_id and not self.is_tombstoned_google_id(user.google_id):
+            user.google_id = f"{self.DELETED_GOOGLE_PREFIX}{user.id}-{ts}"
+            changed = True
+        if user.google_login_enabled:
+            user.google_login_enabled = False
+            changed = True
+        if user.password_login_enabled:
+            user.password_login_enabled = False
+            changed = True
+
+        return changed
+
+    def tombstone_inactive_user_identities(self) -> int:
+        now = self._utcnow()
+        changed_count = 0
+        users = self.db.query(User).filter(User.is_active.is_(False)).all()
+        for user in users:
+            if self._tombstone_user_identity(user, now):
+                changed_count += 1
+
+        if changed_count:
+            self.db.flush()
+        return changed_count
 
     def _has_blocking_subscription(self, user: User) -> bool:
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user.id).first()
