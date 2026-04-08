@@ -1544,6 +1544,7 @@ export function AttemptDetailOverlay({
     candidateResponse,
   ]);
   const primaryFailedSignal = failedSignals[0] ?? null;
+  const responseRelatedSignals = new Set(["length", "repetition", "format", "json", "required", "empty"]);
   const primaryFailureEvidence = primaryFailedSignal
     ? formatSignalWhy(primaryFailedSignal.id, (signalsDetailsRaw as any)?.[primaryFailedSignal.id])
     : pass
@@ -1553,7 +1554,6 @@ export function AttemptDetailOverlay({
     if (!primaryFailedSignal) {
       return "Baseline and replay replies were captured for comparison.";
     }
-    const responseRelatedSignals = new Set(["length", "repetition", "format", "json", "required", "empty"]);
     if (!responseRelatedSignals.has(primaryFailedSignal.id)) {
       return "";
     }
@@ -1574,6 +1574,7 @@ export function AttemptDetailOverlay({
     }
     return primaryFailureEvidence;
   })();
+  const shouldShowReplyComparison = !primaryFailedSignal || responseRelatedSignals.has(primaryFailedSignal.id);
   const toolImpactSummary = (() => {
     if (toolTotalCalls > 0) {
       const matchedCount = toolExpectationRows.filter(row => row.missingFields.length === 0).length;
@@ -1720,14 +1721,14 @@ export function AttemptDetailOverlay({
               </div>
               <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">{decisionSummary}</p>
               {!pass ? (
-                <div className="mt-4 rounded-2xl bg-rose-500/[0.06] px-4 py-4 ring-1 ring-rose-500/20">
+                <div className="mt-4 rounded-2xl bg-rose-500/[0.06] px-4 py-3 ring-1 ring-rose-500/20">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-rose-200/80">
                     Primary reason
                   </div>
                   <div className="mt-1 text-sm font-medium text-white">
                     {primaryFailedSignal?.label || "Failure reason unavailable"}
                   </div>
-                  <div className="mt-2 text-[11px] leading-relaxed text-white/80">
+                  <div className="mt-1.5 text-[11px] leading-relaxed text-white/80">
                     {primaryFailureEvidence}
                   </div>
                 </div>
@@ -1771,10 +1772,10 @@ export function AttemptDetailOverlay({
           </div>
 
           {attemptCount > 1 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black/12 px-4 py-2 ring-1 ring-white/[0.02]">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black/12 px-3 py-1 ring-1 ring-white/[0.02]">
               <div className="min-w-0">
-                <div className="text-[11px] font-medium text-white/80">{attemptLabel}</div>
-                <div className="mt-1 text-xs text-white/30">
+                <div className="text-[10px] font-medium text-white/70">{attemptLabel}</div>
+                <div className="mt-0.5 text-[10px] text-white/20">
                   {failedOnly
                     ? "Showing failed attempts only."
                     : "Browsing all attempts for this input."}
@@ -1786,7 +1787,7 @@ export function AttemptDetailOverlay({
                   type="button"
                   onClick={() => setNavIndex(v => Math.max(0, v - 1))}
                   disabled={navIndex <= 0}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-black/30 text-white/60 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40 ring-1 ring-white/[0.02]"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-black/30 text-white/55 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40 ring-1 ring-white/[0.02]"
                   aria-label="Previous attempt"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -1795,7 +1796,7 @@ export function AttemptDetailOverlay({
                   <button
                     type="button"
                     onClick={() => setAttemptMenuOpen(!attemptMenuOpen)}
-                    className="flex min-w-[172px] items-center justify-between gap-3 rounded-lg bg-black/28 px-3 py-1.5 text-sm font-medium text-white/80 transition hover:bg-white/5 ring-1 ring-white/[0.02]"
+                    className="flex min-w-[164px] items-center justify-between gap-3 rounded-lg bg-black/28 px-3 py-1 text-[13px] font-medium text-white/75 transition hover:bg-white/5 ring-1 ring-white/[0.02]"
                   >
                     <span>{attemptLabel}</span>
                     <ChevronDown
@@ -1867,7 +1868,7 @@ export function AttemptDetailOverlay({
                   type="button"
                   onClick={() => setNavIndex(v => Math.min(maxNav, v + 1))}
                   disabled={navIndex >= maxNav}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-black/30 text-white/60 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40 ring-1 ring-white/[0.02]"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-black/30 text-white/55 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40 ring-1 ring-white/[0.02]"
                   aria-label="Next attempt"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -2431,69 +2432,71 @@ export function AttemptDetailOverlay({
                         </p>
                       </div>
                     </div>
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-white/90">Reply comparison</p>
-                        <p className="mt-1 text-[11px] text-white/30">{diffConfidenceMessage}</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/40">
-                        <span>Green marks lines added by the replay.</span>
-                        {isResponseDiffCollapsible ? (
-                          <button
-                            type="button"
-                            onClick={() => setShowFullResponseDiff(v => !v)}
-                            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-semibold text-white/60 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
-                          >
-                            {showFullResponseDiff ? "Collapse response" : "Show full response"}
-                          </button>
-                        ) : null}
-                        {diffRemovedCount > 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => setShowRemovedDiffLines(v => !v)}
-                            aria-pressed={showRemovedDiffLines}
-                            className={clsx(
-                              "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[10px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70",
-                              showRemovedDiffLines
-                                ? "border-fuchsia-400/50 bg-fuchsia-500/20 text-fuchsia-50 shadow-[0_0_0_1px_rgba(217,70,239,0.15)] hover:bg-fuchsia-500/25"
-                                : "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-100 hover:bg-fuchsia-500/18"
-                            )}
-                          >
-                            <span>
-                              {showRemovedDiffLines ? "Hide removed lines" : "Show removed lines"}
-                            </span>
-                            <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[9px] font-bold tracking-normal text-white/85">
-                              {diffRemovedCount}
-                            </span>
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                    {isToolDrivenAttempt ? (
-                      <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3 text-[11px] leading-relaxed text-white/40">
-                        This section only compares the user-facing assistant reply. Review the tool
-                        impact summary above if the main outcome happened through a tool call.
-                      </div>
-                    ) : null}
-                    {responseDiffSummary ? (
-                      <div className="mt-4 rounded-2xl bg-white/[0.02] px-4 py-4 ring-1 ring-white/[0.02]">
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">
-                          Reply summary
+                    {shouldShowReplyComparison ? (
+                      <>
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white/90">Reply comparison</p>
+                            <p className="mt-1 text-[11px] text-white/30">{diffConfidenceMessage}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/40">
+                            <span>Green marks lines added by the replay.</span>
+                            {isResponseDiffCollapsible ? (
+                              <button
+                                type="button"
+                                onClick={() => setShowFullResponseDiff(v => !v)}
+                                className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-semibold text-white/60 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                              >
+                                {showFullResponseDiff ? "Collapse response" : "Show full response"}
+                              </button>
+                            ) : null}
+                            {diffRemovedCount > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setShowRemovedDiffLines(v => !v)}
+                                aria-pressed={showRemovedDiffLines}
+                                className={clsx(
+                                  "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[10px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70",
+                                  showRemovedDiffLines
+                                    ? "border-fuchsia-400/50 bg-fuchsia-500/20 text-fuchsia-50 shadow-[0_0_0_1px_rgba(217,70,239,0.15)] hover:bg-fuchsia-500/25"
+                                    : "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-100 hover:bg-fuchsia-500/18"
+                                )}
+                              >
+                                <span>
+                                  {showRemovedDiffLines ? "Hide removed lines" : "Show removed lines"}
+                                </span>
+                                <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[9px] font-bold tracking-normal text-white/85">
+                                  {diffRemovedCount}
+                                </span>
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                        <div className="mt-1 text-sm font-medium text-white">
-                          {responseDiffSummary}
-                        </div>
-                      </div>
-                    ) : null}
-                    {isResponseDiffCollapsible && !showFullResponseDiff ? (
-                      <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3 text-[11px] leading-relaxed text-white/40">
-                        Showing a shortened preview so long responses do not take over the review.
-                        {hiddenResponseDiffLineCount > 0
-                          ? ` Expand to inspect ${hiddenResponseDiffLineCount} more diff line${hiddenResponseDiffLineCount === 1 ? "" : "s"}.`
-                          : " Expand to inspect the full response body."}
-                      </div>
-                    ) : null}
-                    <div className="mt-4 grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+                        {isToolDrivenAttempt ? (
+                          <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3 text-[11px] leading-relaxed text-white/40">
+                            This section only compares the user-facing assistant reply. Review the tool
+                            impact summary above if the main outcome happened through a tool call.
+                          </div>
+                        ) : null}
+                        {responseDiffSummary ? (
+                          <div className="mt-4 rounded-2xl bg-white/[0.02] px-4 py-4 ring-1 ring-white/[0.02]">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">
+                              Reply summary
+                            </div>
+                            <div className="mt-1 text-sm font-medium text-white">
+                              {responseDiffSummary}
+                            </div>
+                          </div>
+                        ) : null}
+                        {isResponseDiffCollapsible && !showFullResponseDiff ? (
+                          <div className="mt-4 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors px-4 py-3 text-[11px] leading-relaxed text-white/40">
+                            Showing a shortened preview so long responses do not take over the review.
+                            {hiddenResponseDiffLineCount > 0
+                              ? ` Expand to inspect ${hiddenResponseDiffLineCount} more diff line${hiddenResponseDiffLineCount === 1 ? "" : "s"}.`
+                              : " Expand to inspect the full response body."}
+                          </div>
+                        ) : null}
+                        <div className="mt-4 grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
                       <div
                         className={clsx(
                           "flex flex-col overflow-hidden rounded-2xl bg-[#0a0a0c] ring-1 ring-white/[0.02]",
@@ -2553,7 +2556,14 @@ export function AttemptDetailOverlay({
                           )}
                         </div>
                       </div>
-                    </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-4 rounded-2xl bg-white/[0.02] px-4 py-3 text-[11px] leading-relaxed text-white/40 ring-1 ring-white/[0.02]">
+                        Reply comparison is hidden because this attempt failed on a non-reply check.
+                        Inspect the detailed checks below for the actual failure cause.
+                      </div>
+                    )}
                   </section>
 
                   {hasAdditionalDetails ? (
