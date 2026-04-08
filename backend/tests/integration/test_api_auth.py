@@ -104,6 +104,40 @@ class TestAuthAPI:
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.json()["error"]["message"] == "Email already registered"
+
+    async def test_register_allows_reuse_after_deleted_account(self, async_client, db):
+        from app.services.account_deletion_service import AccountDeletionService
+
+        original_user = User(
+            email="rejoin@example.com",
+            hashed_password=get_password_hash("LegacyPassword123!"),
+            full_name="Original User",
+            is_active=True,
+            is_email_verified=True,
+        )
+        db.add(original_user)
+        db.commit()
+
+        AccountDeletionService(db).delete_account(original_user)
+        db.commit()
+        db.refresh(original_user)
+
+        assert original_user.is_active is False
+        assert original_user.email.startswith(f"deleted-user-{original_user.id}-")
+
+        response = await async_client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "rejoin@example.com",
+                "password": "FreshPassword123!",
+                "full_name": "New User",
+                "liability_agreement_accepted": True,
+            },
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.json()["email"] == "rejoin@example.com"
+        assert int(response.json()["id"]) != original_user.id
     
     async def test_register_invalid_email(self, async_client):
         """Test registering with invalid email"""
@@ -322,6 +356,71 @@ class TestAuthAPI:
         assert user.google_login_enabled is True
         assert user.password_login_enabled is True
         assert user.is_email_verified is True
+
+    async def test_google_oauth_callback_allows_reuse_after_deleted_account(
+        self, async_client, db, monkeypatch
+    ):
+        import app.api.v1.endpoints.auth as auth_endpoint
+        from app.services.account_deletion_service import AccountDeletionService
+        from app.services.google_oauth_service import GoogleIdentity
+
+        self._mock_google_settings(monkeypatch)
+
+        original_user = User(
+            email="rejoin-google@example.com",
+            hashed_password=get_password_hash("LegacyPassword123!"),
+            full_name="Original Google User",
+            is_active=True,
+            is_email_verified=True,
+            primary_auth_provider="google",
+            password_login_enabled=False,
+            google_login_enabled=True,
+            google_id="google-sub-rejoin",
+        )
+        db.add(original_user)
+        db.commit()
+
+        AccountDeletionService(db).delete_account(original_user)
+        db.commit()
+        db.refresh(original_user)
+
+        assert original_user.is_active is False
+        assert original_user.email.startswith(f"deleted-user-{original_user.id}-")
+        assert original_user.google_id.startswith(f"deleted-google-{original_user.id}-")
+
+        async def _fake_identity(self, code: str):
+            return GoogleIdentity(
+                email="rejoin-google@example.com",
+                email_verified=True,
+                google_id="google-sub-rejoin",
+                full_name="Rejoined Google User",
+                avatar_url="https://example.com/avatar3.png",
+            )
+
+        monkeypatch.setattr(auth_endpoint.GoogleOAuthService, "get_identity_from_code", _fake_identity)
+
+        start_res = await async_client.get(
+            "/api/v1/auth/oauth/google/start?intent=signup&terms_accepted=true",
+        )
+        assert start_res.status_code == status.HTTP_302_FOUND
+        state, cookie_state = self._extract_oauth_state(start_res)
+
+        callback_res = await async_client.get(
+            f"/api/v1/auth/oauth/google/callback?code=test-code&state={state}",
+            headers={"Cookie": f"oauth_google_state={cookie_state}"},
+        )
+        assert callback_res.status_code == status.HTTP_302_FOUND
+
+        recreated_user = (
+            db.query(User)
+            .filter(User.email == "rejoin-google@example.com", User.is_active.is_(True))
+            .first()
+        )
+        assert recreated_user is not None
+        assert recreated_user.id != original_user.id
+        assert recreated_user.google_id == "google-sub-rejoin"
+        assert recreated_user.google_login_enabled is True
+        assert recreated_user.password_login_enabled is False
 
     async def test_verify_email_allows_login_after_confirmation(self, async_client, db):
         register = await async_client.post(

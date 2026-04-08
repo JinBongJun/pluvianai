@@ -30,6 +30,14 @@ class AccountDeletionService:
     def _utcnow(self) -> datetime:
         return datetime.now(timezone.utc)
 
+    def _tombstone_user_identity(self, user: User, now: datetime) -> None:
+        ts = int(now.timestamp())
+        user.email = f"deleted-user-{user.id}-{ts}@deleted.local"
+        if user.google_id:
+            user.google_id = f"deleted-google-{user.id}-{ts}"
+        user.google_login_enabled = False
+        user.password_login_enabled = False
+
     def _has_blocking_subscription(self, user: User) -> bool:
         subscription = self.db.query(Subscription).filter(Subscription.user_id == user.id).first()
         if not subscription:
@@ -190,6 +198,7 @@ class AccountDeletionService:
         )
 
         user.is_active = False
+        self._tombstone_user_identity(user, now)
 
         self.db.flush()
 

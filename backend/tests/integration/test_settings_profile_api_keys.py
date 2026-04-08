@@ -203,7 +203,8 @@ class TestSettingsProfileAndApiKeys:
         )
         db.commit()
 
-        response = await async_client.delete(
+        response = await async_client.request(
+            "DELETE",
             "/api/v1/settings/profile",
             json={"password": "testpassword123", "confirmation_text": "DELETE"},
             headers=auth_headers,
@@ -239,7 +240,8 @@ class TestSettingsProfileAndApiKeys:
         db.add(test_user)
         db.commit()
 
-        blocked_response = await async_client.delete(
+        blocked_response = await async_client.request(
+            "DELETE",
             "/api/v1/settings/profile",
             json={"password": "", "confirmation_text": "DELETE"},
             headers=auth_headers,
@@ -250,7 +252,8 @@ class TestSettingsProfileAndApiKeys:
         assert "google" in str(blocked_detail).lower()
 
         reauth_token = create_google_delete_reauth_token(test_user.id)
-        response = await async_client.delete(
+        response = await async_client.request(
+            "DELETE",
             "/api/v1/settings/profile",
             json={"password": "", "confirmation_text": "DELETE"},
             headers={
@@ -264,6 +267,10 @@ class TestSettingsProfileAndApiKeys:
         db.refresh(org)
         db.refresh(project)
         assert test_user.is_active is False
+        assert test_user.email.startswith(f"deleted-user-{test_user.id}-")
+        assert test_user.google_id.startswith(f"deleted-google-{test_user.id}-")
+        assert test_user.google_login_enabled is False
+        assert test_user.password_login_enabled is False
         assert org.is_deleted is True
         assert project.is_deleted is True
 
@@ -287,7 +294,8 @@ class TestSettingsProfileAndApiKeys:
         db.add(OrganizationMember(organization_id=org.id, user_id=other_user.id, role="member"))
         db.commit()
 
-        response = await async_client.delete(
+        response = await async_client.request(
+            "DELETE",
             "/api/v1/settings/profile",
             json={"password": "testpassword123", "confirmation_text": "DELETE"},
             headers=auth_headers,
@@ -337,7 +345,8 @@ class TestSettingsProfileAndApiKeys:
         )
         db.commit()
 
-        response = await async_client.delete(
+        response = await async_client.request(
+            "DELETE",
             "/api/v1/settings/profile",
             json={"password": "testpassword123", "confirmation_text": "DELETE"},
             headers=auth_headers,
@@ -348,6 +357,8 @@ class TestSettingsProfileAndApiKeys:
         db.refresh(org)
         db.refresh(project)
         assert test_user.is_active is False
+        assert test_user.email.startswith(f"deleted-user-{test_user.id}-")
+        assert test_user.password_login_enabled is False
         assert org.is_deleted is True
         assert project.is_deleted is True
         assert project.is_active is False
