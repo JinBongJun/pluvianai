@@ -212,6 +212,46 @@ class TestSettingsProfileAndApiKeys:
         detail = response.json().get("error") or response.json().get("detail") or {}
         assert "subscription" in str(detail).lower()
 
+    async def test_h8b_google_only_account_can_delete_with_session_confirmation(
+        self, async_client, auth_headers, test_user, db
+    ):
+        org = Organization(name="Google Solo Org", owner_id=test_user.id, plan_type="free")
+        db.add(org)
+        db.flush()
+        db.add(OrganizationMember(organization_id=org.id, user_id=test_user.id, role="owner"))
+
+        project = Project(
+            name="Google Solo Project",
+            owner_id=test_user.id,
+            organization_id=org.id,
+            is_active=True,
+            is_deleted=False,
+            usage_mode="full",
+        )
+        db.add(project)
+        db.flush()
+
+        test_user.primary_auth_provider = "google"
+        test_user.password_login_enabled = False
+        test_user.google_login_enabled = True
+        test_user.google_id = "google-delete-sub"
+        db.add(test_user)
+        db.commit()
+
+        response = await async_client.delete(
+            "/api/v1/settings/profile",
+            json={"password": "", "confirmation_text": "DELETE"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        db.refresh(test_user)
+        db.refresh(org)
+        db.refresh(project)
+        assert test_user.is_active is False
+        assert org.is_deleted is True
+        assert project.is_deleted is True
+
     async def test_h9_delete_account_blocks_shared_org_owner(
         self, async_client, auth_headers, test_user, db
     ):

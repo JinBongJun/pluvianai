@@ -217,17 +217,10 @@ async def delete_account(
             },
         )
 
-    if not bool(getattr(current_user, "password_login_enabled", True)):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "GOOGLE_REAUTH_REQUIRED",
-                "message": "Account deletion for Google-only accounts is not available from self-serve settings yet.",
-            },
-        )
-    
-    # Verify password
-    if not verify_password(request.password, current_user.hashed_password):
+    should_verify_password = bool(getattr(current_user, "password_login_enabled", True))
+
+    # Verify password for accounts that support password sign-in.
+    if should_verify_password and not verify_password(request.password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
