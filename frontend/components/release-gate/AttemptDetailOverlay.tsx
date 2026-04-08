@@ -1700,8 +1700,8 @@ export function AttemptDetailOverlay({
 
   return (
     <div className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-md sm:p-6">
-      <div className="flex h-[90vh] w-full max-w-[1680px] flex-col overflow-hidden rounded-2xl border border-white/[0.03] bg-[#0a0a0c] shadow-2xl">
-        <div className="flex shrink-0 flex-col gap-4 border-b border-white/[0.03] px-6 py-5 sm:px-7">
+      <div className="flex h-[90vh] w-full max-w-[1680px] flex-col overflow-hidden rounded-2xl bg-[#0a0a0c] shadow-2xl">
+        <div className="flex shrink-0 flex-col gap-4 border-b border-white/[0.025] px-6 py-5 sm:px-7">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-semibold text-white/30">Attempt review</div>
@@ -1720,7 +1720,7 @@ export function AttemptDetailOverlay({
               </div>
               <p className="mt-3 max-w-4xl text-sm leading-6 text-white/60">{decisionSummary}</p>
               {!pass ? (
-                <div className="mt-4 rounded-2xl border border-rose-500/18 bg-rose-500/[0.06] px-4 py-4">
+                <div className="mt-4 rounded-2xl bg-rose-500/[0.06] px-4 py-4 ring-1 ring-rose-500/20">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-rose-200/80">
                     Primary reason
                   </div>
@@ -1738,7 +1738,7 @@ export function AttemptDetailOverlay({
               <div
                 role="tablist"
                 aria-label="Attempt detail tabs"
-                className="hidden shrink-0 flex-wrap items-center gap-1 rounded-xl border border-white/[0.02] bg-white/[0.01] p-1 md:flex"
+                className="hidden shrink-0 flex-wrap items-center gap-1 rounded-xl bg-white/[0.01] p-1 md:flex ring-1 ring-white/[0.03]"
               >
                 {detailTabs.map(tab => {
                   return (
@@ -1763,7 +1763,7 @@ export function AttemptDetailOverlay({
               <button
                 type="button"
                 onClick={onClose}
-                className="shrink-0 rounded-xl border border-white/[0.03] px-4 py-2 text-[11px] font-semibold text-white/60 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
+                className="shrink-0 rounded-xl border border-white/[0.02] px-4 py-2 text-[11px] font-semibold text-white/60 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/70"
               >
                 Close
               </button>
@@ -1771,7 +1771,7 @@ export function AttemptDetailOverlay({
           </div>
 
           {attemptCount > 1 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.02] bg-black/12 px-4 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black/12 px-4 py-2 ring-1 ring-white/[0.02]">
               <div className="min-w-0">
                 <div className="text-[11px] font-medium text-white/80">{attemptLabel}</div>
                 <div className="mt-1 text-xs text-white/30">
@@ -1786,7 +1786,7 @@ export function AttemptDetailOverlay({
                   type="button"
                   onClick={() => setNavIndex(v => Math.max(0, v - 1))}
                   disabled={navIndex <= 0}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.03] bg-black/30 text-white/60 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-black/30 text-white/60 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40 ring-1 ring-white/[0.02]"
                   aria-label="Previous attempt"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -1795,7 +1795,7 @@ export function AttemptDetailOverlay({
                   <button
                     type="button"
                     onClick={() => setAttemptMenuOpen(!attemptMenuOpen)}
-                    className="flex min-w-[172px] items-center justify-between gap-3 rounded-lg border border-white/[0.03] bg-black/28 px-3 py-1.5 text-sm font-medium text-white/80 transition hover:bg-white/5"
+                    className="flex min-w-[172px] items-center justify-between gap-3 rounded-lg bg-black/28 px-3 py-1.5 text-sm font-medium text-white/80 transition hover:bg-white/5 ring-1 ring-white/[0.02]"
                   >
                     <span>{attemptLabel}</span>
                     <ChevronDown
@@ -1807,7 +1807,7 @@ export function AttemptDetailOverlay({
                   </button>
 
                   {attemptMenuOpen && (
-                    <div className="absolute left-0 top-full z-[12000] mt-2 w-72 rounded-xl border border-white/[0.03] bg-[#1e2028] p-2 shadow-2xl">
+                    <div className="absolute left-0 top-full z-[12000] mt-2 w-72 rounded-xl bg-[#1e2028] p-2 shadow-2xl ring-1 ring-white/[0.03]">
                       <div className="mb-2 flex items-center justify-between px-2 pt-1">
                         <span className="text-[11px] font-semibold text-white/40">Attempts</span>
                         <button
@@ -1867,7 +1867,7 @@ export function AttemptDetailOverlay({
                   type="button"
                   onClick={() => setNavIndex(v => Math.min(maxNav, v + 1))}
                   disabled={navIndex >= maxNav}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.03] bg-black/30 text-white/60 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-black/30 text-white/60 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40 ring-1 ring-white/[0.02]"
                   aria-label="Next attempt"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -1878,7 +1878,7 @@ export function AttemptDetailOverlay({
         </div>
 
         {/* Mobile Tab Fallback */}
-        <div className="flex shrink-0 flex-wrap gap-1 border-b border-white/[0.03] px-4 py-2.5 md:hidden">
+        <div className="flex shrink-0 flex-wrap gap-1 border-b border-white/[0.025] px-4 py-2.5 md:hidden">
           {detailTabs.map(tab => {
             return (
               <button
@@ -1905,7 +1905,7 @@ export function AttemptDetailOverlay({
             <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 md:p-7 xl:p-8">
               {detailMainTab === "review" ? (
                 <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5">
-                  <section className="py-6 border-b border-white/[0.03]">
+                  <section className="py-6 border-b border-white/[0.025]">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-xs font-medium text-white/40">
@@ -1940,9 +1940,7 @@ export function AttemptDetailOverlay({
                           </div>
                         </div>
                       </div>
-                      <div
-                        className={clsx("rounded-r-lg px-4 py-4", gateConfidence.toneClass)}
-                      >
+                      <div className={clsx("rounded-r-lg px-4 py-4", gateConfidence.toneClass)}>
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
                           Evidence quality
                         </div>
@@ -1971,7 +1969,7 @@ export function AttemptDetailOverlay({
                       {inputChanged ? (
                         <div className="grid gap-4 xl:grid-cols-2">
                           <div className="rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                            <div className="flex items-center justify-between border-b border-white/[0.03] px-4 py-3">
+                            <div className="flex items-center justify-between border-b border-white/[0.015] px-4 py-3">
                               <span className="text-[11px] font-semibold text-white/40">
                                 Baseline input
                               </span>
@@ -1988,7 +1986,7 @@ export function AttemptDetailOverlay({
                               {baselineInput}
                             </pre>
                           </div>
-                          <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05]">
+                          <div className="rounded-xl bg-fuchsia-500/[0.05] ring-1 ring-fuchsia-500/20">
                             <div className="flex items-center justify-between border-b border-fuchsia-500/10 px-4 py-3">
                               <span className="text-[11px] font-semibold text-fuchsia-100">
                                 Replay input
@@ -2040,7 +2038,7 @@ export function AttemptDetailOverlay({
                         {userInputExpanded ? "Collapse input preview" : "Expand input preview"}
                       </button>
                     </div>
-                    <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.03]">
+                    <div className="mt-4 overflow-hidden rounded-xl bg-transparent ring-1 ring-white/[0.02]">
                       {inputSetupRows.length > 0 ? (
                         inputSetupRows.map((row, idx) => {
                           const actionLabel =
@@ -2070,7 +2068,7 @@ export function AttemptDetailOverlay({
                               }
                               className={clsx(
                                 "grid w-full gap-3 px-4 py-3 text-left sm:grid-cols-[180px_minmax(0,1fr)_auto]",
-                                idx > 0 && "border-t border-white/5",
+                                idx > 0 && "border-t border-white/[0.015]",
                                 row.action && "transition hover:bg-white/[0.02]",
                                 row.tone === "changed" ? "bg-white/[0.01]" : "bg-transparent"
                               )}
@@ -2113,7 +2111,7 @@ export function AttemptDetailOverlay({
                   </section>
 
                   {isToolDrivenAttempt ? (
-                    <section className="py-6 border-b border-white/[0.03]">
+                    <section className="py-6 border-b border-white/[0.025]">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="max-w-3xl">
                           <div className="text-xs font-medium text-white/40">Tool outcome</div>
@@ -2223,7 +2221,7 @@ export function AttemptDetailOverlay({
                     </section>
                   ) : null}
 
-                  <section className="py-6 border-b border-white/[0.03]">
+                  <section className="py-6 border-b border-white/[0.025]">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-xs font-medium text-white/40">Detailed checks</div>
@@ -2478,7 +2476,7 @@ export function AttemptDetailOverlay({
                       </div>
                     ) : null}
                     {responseDiffSummary ? (
-                      <div className="mt-4 rounded-2xl border border-white/[0.04] bg-white/[0.02] px-4 py-4">
+                      <div className="mt-4 rounded-2xl bg-white/[0.02] px-4 py-4 ring-1 ring-white/[0.02]">
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">
                           Reply summary
                         </div>
@@ -2498,13 +2496,13 @@ export function AttemptDetailOverlay({
                     <div className="mt-4 grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
                       <div
                         className={clsx(
-                          "flex flex-col overflow-hidden rounded-2xl border border-white/[0.03] bg-[#0a0a0c]",
+                          "flex flex-col overflow-hidden rounded-2xl bg-[#0a0a0c] ring-1 ring-white/[0.02]",
                           isResponseDiffCollapsible && !showFullResponseDiff
                             ? "min-h-[280px]"
                             : "min-h-[420px]"
                         )}
                       >
-                        <div className="flex items-center justify-between border-b border-white/[0.03] bg-black/40 px-4 py-3">
+                        <div className="flex items-center justify-between border-b border-white/[0.015] bg-black/40 px-4 py-3">
                           <span className="text-[11px] font-semibold text-white/40">Baseline</span>
                           <span className="text-[10px] text-white/30">{baselineModel}</span>
                         </div>
@@ -2514,13 +2512,13 @@ export function AttemptDetailOverlay({
                       </div>
                       <div
                         className={clsx(
-                          "flex flex-col overflow-hidden rounded-2xl border border-white/[0.03] bg-[#0a0a0c]",
+                          "flex flex-col overflow-hidden rounded-2xl bg-[#0a0a0c] ring-1 ring-white/[0.02]",
                           isResponseDiffCollapsible && !showFullResponseDiff
                             ? "min-h-[280px]"
                             : "min-h-[420px]"
                         )}
                       >
-                        <div className="flex items-center justify-between border-b border-white/[0.03] bg-black/40 px-4 py-3">
+                        <div className="flex items-center justify-between border-b border-white/[0.015] bg-black/40 px-4 py-3">
                           <span className="text-[11px] font-semibold text-white/40">Replay</span>
                           <span className="text-[10px] text-white/30">{candidateModel}</span>
                         </div>
@@ -2560,7 +2558,7 @@ export function AttemptDetailOverlay({
 
                   {hasAdditionalDetails ? (
                     <div ref={detailsSectionRef} className="grid gap-5">
-                      <section className="py-6 border-b border-white/[0.03]">
+                      <section className="py-6 border-b border-white/[0.025]">
                         <div>
                         <div className="text-xs font-medium text-white/40">Extra details</div>
                           <h3 className="mt-2 text-lg font-semibold text-white">
