@@ -7,12 +7,23 @@ import { Activity, ChevronDown, Copy } from "lucide-react";
 
 type StackOption = "python" | "node";
 
-export function LiveViewEmptyState({ projectId }: { projectId?: number }) {
-  const [copied, setCopied] = useState(false);
+export function LiveViewEmptyState({
+  projectId,
+  orgId,
+}: {
+  projectId?: number;
+  orgId?: string;
+}) {
+  const [snippetCopied, setSnippetCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<"projectId" | "ingestUrl" | null>(null);
   const [selectedStack, setSelectedStack] = useState<StackOption>("python");
   const resolvedProjectId =
     projectId && !Number.isNaN(projectId) ? String(projectId) : "YOUR_PROJECT_ID";
   const ingestEndpoint = `POST /api/v1/projects/${resolvedProjectId}/api-calls`;
+  const settingsHref =
+    orgId && resolvedProjectId !== "YOUR_PROJECT_ID"
+      ? `/organizations/${orgId}/projects/${resolvedProjectId}/settings/api-keys`
+      : "/docs?section=integrations";
 
   const pythonSnippet = `import requests
 
@@ -60,10 +71,17 @@ requests.post(
 
   const onCopy = useCallback(() => {
     navigator.clipboard.writeText(snippet).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setSnippetCopied(true);
+      setTimeout(() => setSnippetCopied(false), 2000);
     });
   }, [snippet]);
+
+  const handleCopyField = useCallback((field: "projectId" | "ingestUrl", value: string) => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(current => (current === field ? null : current)), 2000);
+    });
+  }, []);
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center justify-start overflow-y-auto bg-[#030303] px-8 pb-20 pt-10 text-center custom-scrollbar">
@@ -163,9 +181,19 @@ requests.post(
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">What you need</p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Project ID
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  Project ID
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopyField("projectId", resolvedProjectId)}
+                  className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300 transition-colors hover:bg-white/10"
+                >
+                  <Copy className="h-3 w-3" />
+                  {copiedField === "projectId" ? "Copied" : "Copy"}
+                </button>
+              </div>
               <p className="mt-2 break-all text-sm font-semibold text-white">{resolvedProjectId}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
@@ -173,11 +201,27 @@ requests.post(
                 Server API key
               </p>
               <p className="mt-2 text-sm font-semibold text-white">Copy from Project Settings</p>
+              <Link
+                href={settingsHref}
+                className="mt-3 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300 transition-colors hover:bg-emerald-500/15"
+              >
+                Open Project Settings
+              </Link>
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Ingest URL
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                  Ingest URL
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopyField("ingestUrl", ingestEndpoint)}
+                  className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300 transition-colors hover:bg-white/10"
+                >
+                  <Copy className="h-3 w-3" />
+                  {copiedField === "ingestUrl" ? "Copied" : "Copy"}
+                </button>
+              </div>
               <p className="mt-2 break-all text-sm font-semibold text-white">{ingestEndpoint}</p>
             </div>
           </div>
@@ -228,7 +272,7 @@ requests.post(
             >
               <Copy className="h-4 w-4" />
             </button>
-            {copied ? (
+            {snippetCopied ? (
               <span className="absolute right-12 top-3 text-[10px] font-bold uppercase text-emerald-400">
                 Copied
               </span>
