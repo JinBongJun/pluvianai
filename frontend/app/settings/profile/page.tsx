@@ -455,7 +455,10 @@ export default function ProfileSettingsPage() {
           </div>
         ) : null}
 
-        <section className="rounded-xl border border-white/10 bg-white/[0.03] p-6 space-y-4">
+        <section
+          id="service-api-keys"
+          className="scroll-mt-24 rounded-xl border border-white/10 bg-white/[0.03] p-6 space-y-4"
+        >
           <h2 className="text-lg font-bold text-white">Profile</h2>
           <div className="grid md:grid-cols-2 gap-4">
             <div>

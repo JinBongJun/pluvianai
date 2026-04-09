@@ -22,7 +22,7 @@ export function LiveViewEmptyState({
   const resolvedProjectId =
     projectId && !Number.isNaN(projectId) ? String(projectId) : "YOUR_PROJECT_ID";
   const apiBaseUrl = "https://api.pluvianai.com";
-  const settingsHref = "/settings/profile";
+  const settingsHref = "/settings/profile#service-api-keys";
 
   const sdkInstallSnippet =
     selectedStack === "python" ? "pip install pluvianai openai" : "npm install pluvianai openai";

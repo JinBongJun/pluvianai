@@ -89,8 +89,8 @@ const TopHeader: React.FC<TopHeaderProps> = ({
           {/* Left: Brand & Context Switchers */}
           <div className="flex items-center">
             <Link href="/" className="flex items-center gap-4 group mr-8">
-              <div className="relative w-14 h-14 select-none group-hover:scale-110 transition-transform duration-300 flex items-center justify-center">
-                <PluvianLogoMark className="h-full w-full drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
+              <div className="relative w-16 h-16 select-none group-hover:scale-110 transition-transform duration-300 flex items-center justify-center">
+                <PluvianLogoMark className="h-full w-full drop-shadow-[0_0_18px_rgba(6,182,212,0.45)]" />
               </div>
               <span className="text-3xl font-black text-white uppercase tracking-tighter group-hover:text-emerald-400 transition-colors">
                 PLUVIANAI
