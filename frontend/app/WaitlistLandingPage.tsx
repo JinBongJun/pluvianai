@@ -221,23 +221,21 @@ export default function Home() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </div>
-            Clinical Grade Validation
+            Production-grade validation
           </div>
 
           <div className="max-w-6xl mx-auto space-y-10">
             <div className="space-y-4">
               <h1 className="text-6xl md:text-8xl font-extrabold tracking-tight text-white leading-[1.1] drop-shadow-2xl">
-                The Symbiotic Guardian <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400 animate-gradient-x pb-2">
-                  for AI Agents.
-                </span>
+                Catch regressions before you ship.
               </h1>
               <p className="text-xl md:text-2xl text-white max-w-3xl mx-auto font-extrabold leading-relaxed pt-6">
-                Cut hallucination rates & logic errors in half. Instantly.
+                Replay production traces under candidate configs. Compare baseline and candidate
+                behavior with deterministic checks.
                 <br />
                 <span className="text-slate-300 font-bold">
-                  We don&apos;t build the Agent. We{" "}
-                  <span className="text-emerald-400 font-bold">cure</span> it.
+                  Model and prompt changes can break consistency. Replay real traces, inspect
+                  failures, and block risky releases before production.
                 </span>
               </p>
             </div>
@@ -336,11 +334,10 @@ export default function Home() {
 
         <div className="w-full max-w-[1800px] mx-auto px-6 md:px-12 lg:px-16 space-y-12 relative z-10">
           <h2 className="text-6xl md:text-[80px] font-bold tracking-tight text-white leading-[0.9]">
-            Stop praying, <br /> start testing.
+            Replay before you ship.
           </h2>
           <p className="text-xl text-slate-400 max-w-xl mx-auto leading-relaxed">
-            Join the elite engineering teams using PluvianAI to build safe, scalable, and
-            predictable AI agents.
+            Build with confidence on real traces, deterministic checks, and strict pass/fail gates.
           </p>
           <div className="pt-8 flex flex-col sm:flex-row gap-6 justify-center">
             {isLoggedIn ? (

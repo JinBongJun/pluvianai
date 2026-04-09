@@ -9,19 +9,19 @@ const steps = [
   {
     num: "01",
     title: "Integrate",
-    desc: "Connect your agent with one line of code. Production traffic instantly flows to Live View for inspection.",
+    desc: "Connect your agent with one line of code. Production traces flow into Live View for inspection.",
     icon: Activity,
   },
   {
     num: "02",
     title: "Monitor",
-    desc: "Atomic Signals evaluate every trace for format, logic, and safety. Spot failures and anomalies at a glance.",
+    desc: "Atomic Signals check every trace for format, logic, and safety. Spot drift and failures at a glance.",
     icon: Microscope,
   },
   {
     num: "03",
     title: "Gate",
-    desc: "Replay traces under your new config. Get a behavior diff and a strict pass/fail Release Gate before you deploy.",
+    desc: "Replay traces under the candidate config. Get a behavior diff and a strict pass/fail Release Gate before deploy.",
     icon: ShieldCheck,
   },
 ];
@@ -88,11 +88,11 @@ export default function TreatmentSection() {
 
             <div className="mt-20 flex flex-col sm:flex-row items-center gap-6">
               <Button className="h-16 px-12 text-xl !font-extrabold rounded-full bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_60px_-10px_rgba(16,185,129,0.55)] hover:shadow-[0_0_80px_-10px_rgba(16,185,129,0.75)] transition-all hover:scale-[1.03]">
-                Get Started
+                Start replaying
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
               <div className="flex items-center gap-2 text-sm text-slate-400">
-                <span>Slots are available</span>
+                <span>Pilot slots available</span>
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               </div>
             </div>
