@@ -106,6 +106,8 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
   const groupedHistoryItems = groupHistoryItemsBySession(nodeHistoryItems);
   const latestResultCard = resultCards[0] ?? null;
   const earlierResultCards = resultCards.slice(1);
+  const latestToolGroundingStatus =
+    (latestResultCard?.toolGroundingRunSummary?.fail ?? 0) > 0 ? "Review" : "OK";
 
   return (
     <RailwaySidePanel
@@ -242,33 +244,22 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                           <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">
                             Tool grounding
                           </div>
-                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/60">
-                            <span>
-                              With tools:{" "}
-                              <span className="font-semibold text-white/90">
-                                {latestResultCard.toolGroundingRunSummary.withTools}
-                              </span>
-                            </span>
-                            <span className="text-emerald-400/90">
-                              Looks good {latestResultCard.toolGroundingRunSummary.pass}
-                            </span>
-                            <span className="text-rose-400/90">
-                              Needs review {latestResultCard.toolGroundingRunSummary.fail}
-                            </span>
-                            {latestResultCard.toolGroundingRunSummary.semanticOk > 0 ? (
-                              <span className="text-violet-300/90">
-                                Semantic OK {latestResultCard.toolGroundingRunSummary.semanticOk}
-                              </span>
-                            ) : null}
-                            {latestResultCard.toolGroundingRunSummary.semanticOff > 0 ? (
-                              <span
-                                className="text-white/30"
-                                title="Semantic judge did not run (e.g. no OpenAI key)."
-                              >
-                                Semantic judge off {latestResultCard.toolGroundingRunSummary.semanticOff}
-                              </span>
-                            ) : null}
+                          <div
+                            className={clsx(
+                              "mt-1 text-[11px] font-semibold",
+                              latestToolGroundingStatus === "OK" ? "text-emerald-300" : "text-rose-300"
+                            )}
+                          >
+                            Tool grounding: {latestToolGroundingStatus}
                           </div>
+                          {latestResultCard.toolGroundingRunSummary.semanticOff > 0 ? (
+                            <div
+                              className="mt-1 text-[11px] text-white/30"
+                              title="Semantic judge did not run (e.g. no OpenAI key)."
+                            >
+                              Semantic judge off
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
