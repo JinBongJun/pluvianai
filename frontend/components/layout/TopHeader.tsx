@@ -24,6 +24,7 @@ import { authAPI } from "@/lib/api/auth";
 import SwitcherDropdown from "@/components/ui/SwitcherDropdown";
 import type { OrganizationProject, OrganizationSummary } from "@/lib/api/types";
 import { canManageOrganization } from "@/lib/organizationAccess";
+import PluvianLogoMark from "@/components/brand/PluvianLogoMark";
 
 interface TopHeaderProps {
   breadcrumb?: { label: string; href?: string }[];
@@ -89,20 +90,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({
           <div className="flex items-center">
             <Link href="/" className="flex items-center gap-4 group mr-8">
               <div className="relative w-14 h-14 select-none group-hover:scale-110 transition-transform duration-300 flex items-center justify-center">
-                <svg
-                  viewBox="0 0 100 100"
-                  className="w-full h-full drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]"
-                >
-                  <path
-                    d="M20 50 C 20 20, 80 20, 80 50 L 80 80 L 20 80 Z"
-                    fill="none"
-                    stroke="#06b6d4"
-                    strokeWidth="4"
-                    className="animate-pulse"
-                  />
-                  <circle cx="40" cy="45" r="5" fill="#10b981" />
-                  <path d="M60 60 L 90 40" stroke="#10b981" strokeWidth="2.5" />
-                </svg>
+                <PluvianLogoMark className="h-full w-full drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
               </div>
               <span className="text-3xl font-black text-white uppercase tracking-tighter group-hover:text-emerald-400 transition-colors">
                 PLUVIANAI
