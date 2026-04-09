@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Activity, ChevronDown, Copy } from "lucide-react";
 
-type StackOption = "python" | "node";
+type StackOption = "python" | "javascript";
 type MethodOption = "sdk" | "http";
 
 export function LiveViewEmptyState({
@@ -198,7 +198,7 @@ sendTestRequest();`;
             </p>
             <p className="mt-2 text-sm font-semibold text-white">Copy credentials</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-400">
-              Get your Project ID and service API key before you connect your app.
+              Get your Project ID and PluvianAI service API key before you connect your app.
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-[#121215]/70 px-5 py-4 shadow-xl">
@@ -246,7 +246,10 @@ sendTestRequest();`;
                 Service API key
               </p>
               <p className="mt-2 text-sm font-semibold text-white">
-                Create or copy from Profile Settings
+                Used to send SDK or HTTP ingest requests to PluvianAI.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                This is not your OpenAI, Anthropic, or Google provider key.
               </p>
               <Link
                 href={settingsHref}
@@ -284,6 +287,10 @@ sendTestRequest();`;
               <p className="mt-1 text-xs font-medium text-slate-400">
                 SDK is the fastest path for most users. Raw HTTP is an advanced option that sends
                 events directly to the ingest API.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                Provider keys are added later from a live node&apos;s Settings panel after your
+                first node appears.
               </p>
             </div>
 
@@ -326,14 +333,14 @@ sendTestRequest();`;
               </button>
               <button
                 type="button"
-                onClick={() => setSelectedStack("node")}
+                onClick={() => setSelectedStack("javascript")}
                 className={
-                  selectedStack === "node"
+                  selectedStack === "javascript"
                     ? "rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300"
                     : "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/10"
                 }
               >
-                Node
+                JavaScript
               </button>
             </div>
 
@@ -365,7 +372,7 @@ sendTestRequest();`;
               <p className="mt-1 text-xs font-medium text-slate-400">
                 {selectedMethod === "sdk"
                   ? "Put this near app startup so it runs before your first model call."
-                  : "Use a service API key with ingest access and send this from your backend."}
+                  : "Use your PluvianAI service API key and send this request from your backend."}
               </p>
             </div>
 
@@ -464,8 +471,9 @@ sendTestRequest();`;
             <li>
               {selectedMethod === "sdk"
                 ? "Check that pluvianai.init() runs before your first real model call."
-                : "Check that your service API key has ingest access."}
+                : "Check that the request is going to /api/v1/projects/{project_id}/api-calls."}
             </li>
+            <li>Provider keys are added later from the node Settings panel, not here.</li>
           </ul>
         </details>
 

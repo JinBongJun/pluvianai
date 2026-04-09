@@ -119,10 +119,10 @@ export default function DocsPage() {
             <p className="text-base text-amber-500/80 leading-relaxed font-medium">
               Start by mirroring your agent&apos;s requests and responses to PluvianAI. The usual
               path is the <strong className="text-amber-200">SDK</strong> or a direct{" "}
-              <strong className="text-amber-200">POST …/api-calls</strong> ingest (see Integrations).
+              <strong className="text-amber-200">POST ??api-calls</strong> ingest (see Integrations).
               You can also run through the optional validation proxy, or call the dashboard{" "}
-              <strong className="text-amber-200">POST …/snapshots</strong> API when building
-              internal tools — each path uses different auth (see step 01 below).
+              <strong className="text-amber-200">POST ??snapshots</strong> API when building
+              internal tools ??each path uses different auth (see step 01 below).
             </p>
           </div>
 
@@ -140,14 +140,14 @@ export default function DocsPage() {
               <strong className="text-slate-200">model</strong>, normalized{" "}
               <strong className="text-slate-200">system prompt</strong>, selected generation
               settings, and declared <strong className="text-slate-200">tools/functions</strong>{" "}
-              schema — so two configs that differ only by display name still get different nodes if
+              schema ??so two configs that differ only by display name still get different nodes if
               their signatures differ. SDK <span className="font-mono text-xs">agent_name</span> is
               a <strong className="text-slate-200">label</strong>; it is{" "}
               <strong className="text-slate-200">not</strong> part of that signature.
             </p>
             <p className="text-sm text-slate-500 leading-relaxed">
               Optional override: when using{" "}
-              <span className="font-mono text-xs text-emerald-300">POST …/snapshots</span>, you may
+              <span className="font-mono text-xs text-emerald-300">POST ??snapshots</span>, you may
               pass <span className="font-mono text-xs">agent_id</span> in the JSON body to force the
               stored node id after ingest (e.g. align with an external id).
             </p>
@@ -197,7 +197,7 @@ export default function DocsPage() {
                 Separately, the backend may attach additional{" "}
                 <strong className="text-slate-300">clinical-style diagnostic scores</strong> on the
                 stored payload (radar / taxonomy metrics). Those are not the same knobs as the
-                Evaluation matrix — think of Evaluation as the pass/fail checks you configure in
+                Evaluation matrix ??think of Evaluation as the pass/fail checks you configure in
                 the UI for gating and triage. Labels and presentation may evolve between releases.
               </p>
               <p className="text-xs text-slate-500 leading-relaxed mb-8 max-w-3xl">
@@ -205,7 +205,7 @@ export default function DocsPage() {
                 evaluation dimensions in the product schema.{" "}
                 <strong className="text-slate-300">Live Logs sample window</strong> (how many recent
                 logs to aggregate) is configured separately via{" "}
-                <code className="font-mono text-[10px]">window.limit</code> — it is not a twelfth
+                <code className="font-mono text-[10px]">window.limit</code> ??it is not a twelfth
                 check type.
               </p>
 
@@ -286,7 +286,7 @@ export default function DocsPage() {
               <p className="text-xs text-slate-500 leading-relaxed max-w-3xl mt-4">
                 <strong className="text-slate-300">Release Gate</strong> run views may surface
                 additional signals (for example <span className="font-mono text-slate-400">tool_grounding</span>{" "}
-                / “Tool Result Grounding”) that are computed during compare/replay — they are not
+                / ?쏷ool Result Grounding?? that are computed during compare/replay ??they are not
                 extra rows in the Live View Evaluation matrix above.
               </p>
             </div>
@@ -294,7 +294,7 @@ export default function DocsPage() {
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 max-w-5xl space-y-5">
             <h4 className="text-base font-black uppercase tracking-[0.2em] text-slate-200">
-              Policy (Guardrails) — Scopes & Tool Definition
+              Policy (Guardrails) ??Scopes & Tool Definition
             </h4>
             <p className="text-sm text-slate-400 leading-relaxed">
               Policy is for{" "}
@@ -312,7 +312,7 @@ export default function DocsPage() {
                   Apply to every agent in the project (baseline guardrails).
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Use for org-wide safety: block dangerous tools, enforce “search before answer”,
+                  Use for org-wide safety: block dangerous tools, enforce ?쐓earch before answer??
                   set required schema for critical actions.
                 </p>
               </div>
@@ -322,7 +322,7 @@ export default function DocsPage() {
                   Only apply when validating traces that include a specific agent id.
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Use when one agent has special permissions (e.g., “payments_agent” can call
+                  Use when one agent has special permissions (e.g., ?쐏ayments_agent??can call
                   billing tools; others cannot).
                 </p>
                 <p className="mt-2 text-xs text-slate-500">
@@ -342,7 +342,7 @@ export default function DocsPage() {
                 </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/20 p-4 md:col-span-2">
-                <h5 className="text-sm font-black text-white">4) What is a “Tool”?</h5>
+                <h5 className="text-sm font-black text-white">4) What is a ?쏷ool??</h5>
                 <p className="mt-2 text-xs text-slate-400">
                   In PluvianAI, a tool is a{" "}
                   <span className="text-white font-semibold">named action</span> the agent requests
@@ -364,7 +364,7 @@ export default function DocsPage() {
                 </ul>
                 <p className="mt-3 text-xs text-slate-500">
                   Recommendation: start with LLM tool calls. Add lightweight instrumentation only
-                  for “must be correct” tools (payments, secrets, outbound side-effects).
+                  for ?쐌ust be correct??tools (payments, secrets, outbound side-effects).
                 </p>
               </div>
             </div>
@@ -380,8 +380,8 @@ export default function DocsPage() {
                   tool is called outside the allowlist.
                 </li>
                 <li>
-                  <span className="text-slate-300 font-semibold">tool_order</span>: enforce “A must
-                  happen before B”.
+                  <span className="text-slate-300 font-semibold">tool_order</span>: enforce ?쏛 must
+                  happen before B??
                 </li>
                 <li>
                   <span className="text-slate-300 font-semibold">tool_args_schema</span>: validate
@@ -393,7 +393,7 @@ export default function DocsPage() {
               <h5 className="text-sm font-black text-white">Example Rule JSON</h5>
               <p className="text-xs text-slate-500 leading-relaxed">
                 Create these from{" "}
-                <span className="text-slate-300 font-semibold">Live View → agent → Policy tab</span>{" "}
+                <span className="text-slate-300 font-semibold">Live View ??agent ??Policy tab</span>{" "}
                 or via API. Agent overrides are additive on top of project defaults. For{" "}
                 <span className="font-mono text-slate-300">scope_type: agent</span>,{" "}
                 <span className="font-mono text-slate-300">scope_ref</span> must match that
@@ -403,7 +403,7 @@ export default function DocsPage() {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="rounded-lg border border-white/10 bg-black/30 p-3">
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
-                    Project Default · Forbidden
+                    Project Default 쨌 Forbidden
                   </div>
                   <pre className="text-[10px] font-mono leading-relaxed text-emerald-300 whitespace-pre-wrap">
                     {`{
@@ -421,7 +421,7 @@ export default function DocsPage() {
                 </div>
                 <div className="rounded-lg border border-white/10 bg-black/30 p-3">
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
-                    Agent Override · Allowlist
+                    Agent Override 쨌 Allowlist
                   </div>
                   <pre className="text-[10px] font-mono leading-relaxed text-emerald-300 whitespace-pre-wrap">
                     {`{
@@ -455,7 +455,7 @@ export default function DocsPage() {
                   <strong className="text-slate-200">Primary (production ingest):</strong> use the
                   SDK or{" "}
                   <code className="font-mono text-xs text-emerald-300">
-                    POST …/api/v1/projects/{"{"}id{"}"}/api-calls
+                    POST ??api/v1/projects/{"{"}id{"}"}/api-calls
                   </code>{" "}
                   with a <strong className="text-slate-200">project API key</strong> that has the{" "}
                   <code className="font-mono text-xs">ingest</code> scope. The ingest endpoint returns{" "}
@@ -466,10 +466,10 @@ export default function DocsPage() {
                 <p>
                   <strong className="text-slate-200">Dashboard / simulation API:</strong>{" "}
                   <code className="font-mono text-xs text-emerald-300">
-                    POST …/api/v1/projects/{"{"}id{"}"}/snapshots
+                    POST ??api/v1/projects/{"{"}id{"}"}/snapshots
                   </code>{" "}
                   expects your <strong className="text-slate-200">logged-in user JWT</strong> (same
-                  session as the web app — <code className="font-mono text-xs">Authorization: Bearer</code>{" "}
+                  session as the web app ??<code className="font-mono text-xs">Authorization: Bearer</code>{" "}
                   with the access token, or cookie session). Project SDK keys are not the intended
                   credential here. Response is <strong className="text-emerald-400">200</strong> if
                   saved synchronously or <strong className="text-emerald-400">202</strong> if queued.
@@ -560,12 +560,12 @@ Content-Type: application/json
                 <code className="px-1.5 py-0.5 rounded bg-black/40 text-violet-300 font-mono text-xs break-all">
                   POST https://api.pluvianai.com/api/v1/projects/YOUR_PROJECT_ID/api-calls
                 </code>
-                — put your numeric project ID in the path (same number as in the project URL).
+                ??put your numeric project ID in the path (same number as in the project URL).
                 Self-hosted? Replace the host with your API base URL.
               </li>
               <li>
                 <strong className="text-slate-200">Auth:</strong>{" "}
-                <code className="font-mono text-xs">Authorization: Bearer YOUR_API_KEY</code> — use a
+                <code className="font-mono text-xs">Authorization: Bearer YOUR_API_KEY</code> ??use a
                 project API key with the <strong className="text-slate-200">ingest</strong> scope (or{" "}
                 <code className="font-mono text-xs">*</code>).
               </li>
@@ -576,7 +576,7 @@ Content-Type: application/json
               </li>
               <li>
                 <strong className="text-slate-200">Success:</strong>{" "}
-                <strong className="text-emerald-400">202 Accepted</strong> — the run will show up in
+                <strong className="text-emerald-400">202 Accepted</strong> ??the run will show up in
                 Live View shortly after.
               </li>
               <li>
@@ -623,7 +623,7 @@ Content-Type: application/json
                 <tr className="border-b border-white/5">
                   <td className="py-3 pr-4 font-mono text-xs text-violet-300">LangChain</td>
                   <td className="py-3">
-                    Your <strong className="text-slate-200">Python or TypeScript app</strong> — after
+                    Your <strong className="text-slate-200">Python or TypeScript app</strong> ??after
                     each LLM call, in a callback, or inside a thin wrapper around the model client.
                   </td>
                 </tr>
@@ -632,7 +632,7 @@ Content-Type: application/json
                   <td className="py-3">
                     The <strong className="text-slate-200">host app</strong> that runs your agent and
                     MCP client, or <strong className="text-slate-200">your MCP server code</strong>{" "}
-                    (e.g. after a tool handler). MCP messages themselves have no PluvianAI hook — you
+                    (e.g. after a tool handler). MCP messages themselves have no PluvianAI hook ??you
                     send from code you control.
                   </td>
                 </tr>
@@ -660,10 +660,10 @@ Content-Type: application/json
                 <code className="px-1.5 py-0.5 rounded bg-black/40 text-slate-200 font-mono text-xs">
                   npm install pluvianai
                 </code>
-                . Open a <strong>terminal</strong> (on Mac: Spotlight → type &quot;Terminal&quot;;
+                . Open a <strong>terminal</strong> (on Mac: Spotlight ??type &quot;Terminal&quot;;
                 on Windows: Command Prompt or PowerShell, or the Terminal tab in VS Code/Cursor).
                 Type the command and press Enter. <code className="font-mono text-xs">pip</code> and{" "}
-                <code className="font-mono text-xs">npm</code> are installers — they download the
+                <code className="font-mono text-xs">npm</code> are installers ??they download the
                 library so your code can use it.
               </p>
               <p>
@@ -684,7 +684,7 @@ Content-Type: application/json
             </div>
           </div>
 
-          {/* 유의: 두 종류의 API 키 */}
+          {/* ?좎쓽: ??醫낅쪟??API ??*/}
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 max-w-4xl">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0 mt-0.5" />
@@ -694,7 +694,7 @@ Content-Type: application/json
                 </h4>
                 <ul className="text-sm text-slate-300 space-y-1 list-disc list-inside">
                   <li>
-                    <strong className="text-slate-200">PluvianAI API key</strong> — Used when you
+                    <strong className="text-slate-200">PluvianAI API key</strong> - Used when you
                     first integrate (init). Issued by PluvianAI; it authenticates traffic sent to
                     our server. It is not the same as your OpenAI/Anthropic keys.
                   </li>
@@ -702,7 +702,7 @@ Content-Type: application/json
                     <strong className="text-slate-200">
                       Provider API keys (OpenAI, Anthropic, Google)
                     </strong>{" "}
-                    — Registered in Live View → agent → Settings. Only needed when re-running Release
+                    - Registered in Live View - agent - Settings. Only needed when re-running Release
                     Gate. Do not confuse these with the key you enter at init.
                   </li>
                 </ul>
@@ -729,7 +729,7 @@ Content-Type: application/json
             </h4>
             <p className="text-sm text-slate-300 leading-relaxed mb-2">
               Adding PluvianAI is a small code change (one init call). For it to take effect, you
-              deploy the new version and the process loads the new code — same as any other deploy.
+              deploy the new version and the process loads the new code ??same as any other deploy.
               You do <strong className="text-slate-200">not</strong> have to stop your whole service
               first.
             </p>
@@ -767,8 +767,8 @@ Content-Type: application/json
                 </code>
               </li>
               <li>
-                Replace <strong className="text-slate-200">YOUR_API_KEY</strong> with your real API
-                key (Project Settings → API Keys). Replace{" "}
+                Replace <strong className="text-slate-200">YOUR_API_KEY</strong> with your real
+                PluvianAI API key (Settings - Profile). Replace{" "}
                 <strong className="text-slate-200">YOUR_PROJECT_ID</strong> with your project ID
                 (the number in the URL when you&apos;re in the project).
               </li>
@@ -800,10 +800,10 @@ Content-Type: application/json
               <li>
                 Replace <strong className="text-slate-200">YOUR_API_KEY</strong> and{" "}
                 <strong className="text-slate-200">YOUR_PROJECT_ID</strong> with your real values
-                (API key from Project Settings → API Keys; project ID from the project URL).
+                (PluvianAI API key from Settings - Profile; project ID from the project URL).
               </li>
               <li>Run your app and make one LLM call.</li>
-              <li>Open Live View and refresh — you should see the run.</li>
+              <li>Open Live View and refresh ??you should see the run.</li>
             </ol>
           </section>
 
@@ -827,14 +827,13 @@ Content-Type: application/json
                   https://api.pluvianai.com/api/v1/projects/YOUR_PROJECT_ID/api-calls
                 </code>{" "}
                 (replace <code className="font-mono text-xs">YOUR_PROJECT_ID</code> with your numeric
-                project ID). <strong className="text-slate-200">Authentication</strong> = Header Auth →
-                Header name <code className="font-mono text-xs">Authorization</code>, Value{" "}
+                project ID). <strong className="text-slate-200">Authentication</strong> = Header Auth ??                Header name <code className="font-mono text-xs">Authorization</code>, Value{" "}
                 <code className="font-mono text-xs">Bearer YOUR_API_KEY</code> (ingest-scoped key).
               </li>
               <li>
                 Body = JSON. Map <code className="font-mono text-xs">request_data</code> and{" "}
                 <code className="font-mono text-xs">response_data</code> from the previous
-                node&apos;s output (field names differ by n8n / OpenAI node version — use the JSON
+                node&apos;s output (field names differ by n8n / OpenAI node version ??use the JSON
                 you sent to the model and the JSON you got back). You can omit{" "}
                 <code className="font-mono text-xs">project_id</code> in the body when it is already
                 in the URL.
@@ -849,7 +848,7 @@ Content-Type: application/json
               </li>
               <li>
                 Execute the workflow. A <strong className="text-emerald-400">202</strong> response
-                means ingest was accepted. Open Live View and refresh — you should see the run.
+                means ingest was accepted. Open Live View and refresh ??you should see the run.
               </li>
             </ol>
           </section>
@@ -866,7 +865,7 @@ Content-Type: application/json
               MCP does not define a PluvianAI slot inside protocol messages. Add a short HTTP (or use
               the Python / Node SDK) in the <strong className="text-slate-200">host</strong> that
               orchestrates the LLM, or inside <strong className="text-slate-200">your MCP server</strong>{" "}
-              after you handle a tool — wherever you already have the model request and response
+              after you handle a tool ??wherever you already have the model request and response
               objects.
             </p>
             <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
@@ -882,7 +881,7 @@ Content-Type: application/json
                 <code className="font-mono text-xs">Content-Type: application/json</code>
               </li>
               <li>
-                Body (JSON): same shape as in the ingest box above —{" "}
+                Body (JSON): same shape as in the ingest box above -
                 <code className="font-mono text-xs">agent_name</code> (e.g. &quot;mcp_agent&quot;),{" "}
                 <code className="font-mono text-xs">request_data</code>,{" "}
                 <code className="font-mono text-xs">response_data</code>,{" "}
@@ -900,7 +899,7 @@ Content-Type: application/json
               </li>
               <li>
                 After one LLM call, expect <strong className="text-emerald-400">202</strong> and check
-                Live View — the run should appear.
+                Live View ??the run should appear.
               </li>
             </ol>
           </section>
@@ -942,7 +941,7 @@ Content-Type: application/json
             </h3>
             <ol className="list-decimal list-inside space-y-3 text-sm text-slate-300">
               <li>
-                Get your API key (Project Settings → API Keys) and your project ID (from the URL).
+                Get your PluvianAI API key (Settings - Profile) and your project ID (from the URL).
               </li>
               <li>
                 Send a POST request to:{" "}
@@ -983,7 +982,7 @@ Content-Type: application/json
             <ul className="text-sm text-slate-300 space-y-2 list-disc list-inside">
               <li>
                 <strong className="text-slate-200">404:</strong> URL missing the project ID in the
-                path — use{" "}
+                path ??use{" "}
                 <code className="font-mono text-xs">/api/v1/projects/YOUR_PROJECT_ID/api-calls</code>
                 .
               </li>
@@ -1197,7 +1196,7 @@ Content-Type: application/json
                       Provider API key not registered (using your own model)
                     </td>
                     <td className="px-4 py-3">
-                      In Live View, open the agent → <strong>Settings</strong> →{" "}
+                      In Live View, open the agent -&gt; <strong>Settings</strong> -&gt;{" "}
                       <strong>Provider API Keys</strong>, then add the key for the provider (OpenAI,
                       Anthropic, or Google) you use.
                     </td>
@@ -1292,7 +1291,7 @@ Content-Type: application/json
             </div>
             <p className="text-xs text-slate-500 leading-relaxed max-w-3xl">
               Exact numeric caps (snapshots per month, rate limits, seat limits) depend on your plan
-              and can change — use <strong className="text-slate-300">Settings</strong> and{" "}
+              and can change ??use <strong className="text-slate-300">Settings</strong> and{" "}
               <strong className="text-slate-300">Billing</strong> in the product as the source of
               truth.
             </p>
@@ -1368,10 +1367,10 @@ Content-Type: application/json
                       Wrong or missing PluvianAI API key (SDK / ingest)
                     </td>
                     <td className="px-4 py-3">
-                      Create a project API key with <code className="font-mono text-xs">ingest</code>{" "}
-                      scope under <strong>Project Settings → API Keys</strong>. For dashboard-only
-                      flows you may also use keys from{" "}
-                      <strong>Settings → Profile</strong> where documented.
+                      Create a PluvianAI API key under <strong>Settings - Profile</strong>. This
+                      key is used for SDK / ingest authentication. Provider keys (OpenAI,
+                      Anthropic, Google) are added later from <strong>Live View - agent -
+                      Settings</strong>.
                     </td>
                   </tr>
                   <tr className="border-b border-white/5">
@@ -1433,7 +1432,7 @@ Content-Type: application/json
                 the configurable checks behind Snapshot Details (latency, JSON, refusal, tool policy
                 pass/fail, etc.). The platform may also store broader{" "}
                 <strong className="text-slate-200">diagnostic scores</strong> on each snapshot for
-                analytics — separate from the Evaluation toggles you use for gating.
+                analytics ??separate from the Evaluation toggles you use for gating.
               </p>
             </div>
 
@@ -1523,9 +1522,9 @@ Content-Type: application/json
         <div className="space-y-8">
           <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
             In the product UI this is the <strong className="text-slate-200">Policy</strong> tab on
-            an agent in Live View (older docs may say “Logic Guard”). Define rule-based policies on
+            an agent in Live View (older docs may say ?쏬ogic Guard??. Define rule-based policies on
             tool usage and trace structure: forbidden tools, allowlists, ordering, and argument
-            schemas — enforced in Release Gate, Live Logs, and CI-style gates.
+            schemas ??enforced in Release Gate, Live Logs, and CI-style gates.
           </p>
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 max-w-4xl">
             <h4 className="text-base font-black uppercase tracking-[0.2em] text-slate-300">
@@ -1576,7 +1575,7 @@ Content-Type: application/json
               ingested. <strong className="text-slate-200">Policy</strong> (behavior) validation may
               also be kicked off automatically after some ingest paths (e.g. dashboard snapshot
               create), and is always available on demand from Live Logs, Release Gate, Compare, and
-              CI-style gates — so you can still control when to surface or block on policy results.
+              CI-style gates ??so you can still control when to surface or block on policy results.
             </p>
           </div>
         </div>
@@ -1681,7 +1680,7 @@ Content-Type: application/json
           <RobotBirdIcon size={24} className="opacity-50" />
         </div>
         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600">
-          PluvianAI — Node-Level Regression Guard. © 2026 PluvianAI Inc. <br />
+          PluvianAI ??Node-Level Regression Guard. 짤 2026 PluvianAI Inc. <br />
           Documentation v1.0
         </p>
       </footer>
