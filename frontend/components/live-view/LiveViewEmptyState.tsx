@@ -10,7 +10,6 @@ type MethodOption = "sdk" | "http";
 
 export function LiveViewEmptyState({
   projectId,
-  orgId,
 }: {
   projectId?: number;
   orgId?: string;
@@ -19,13 +18,11 @@ export function LiveViewEmptyState({
   const [copiedField, setCopiedField] = useState<"projectId" | "apiUrl" | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<MethodOption>("sdk");
   const [selectedStack, setSelectedStack] = useState<StackOption>("python");
+
   const resolvedProjectId =
     projectId && !Number.isNaN(projectId) ? String(projectId) : "YOUR_PROJECT_ID";
   const apiBaseUrl = "https://api.pluvianai.com";
-  const settingsHref =
-    orgId && resolvedProjectId !== "YOUR_PROJECT_ID"
-      ? `/organizations/${orgId}/projects/${resolvedProjectId}/settings/api-keys`
-      : "/docs?section=integrations";
+  const settingsHref = "/settings/profile";
 
   const sdkInstallSnippet =
     selectedStack === "python" ? "pip install pluvianai openai" : "npm install pluvianai openai";
@@ -133,11 +130,10 @@ sendTestRequest();`;
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center justify-start overflow-y-auto bg-[#030303] px-8 pb-20 pt-10 text-center custom-scrollbar">
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#101018,transparent_50%)] opacity-70" />
-
-        <div className="absolute top-[-10%] right-[-10%] h-[500px] w-[120%] -rotate-[35deg] bg-gradient-to-r from-transparent via-cyan-500/15 to-transparent blur-[100px] mix-blend-screen" />
-        <div className="absolute top-[20%] left-[-20%] h-[600px] w-[150%] -rotate-[35deg] bg-gradient-to-r from-transparent via-emerald-500/15 to-transparent blur-[120px] mix-blend-screen" />
+        <div className="absolute right-[-10%] top-[-10%] h-[500px] w-[120%] -rotate-[35deg] bg-gradient-to-r from-transparent via-cyan-500/15 to-transparent blur-[100px] mix-blend-screen" />
+        <div className="absolute left-[-20%] top-[20%] h-[600px] w-[150%] -rotate-[35deg] bg-gradient-to-r from-transparent via-emerald-500/15 to-transparent blur-[120px] mix-blend-screen" />
 
         <div
           className="absolute top-1/2 -left-[15%] h-[100%] w-[35%] -translate-y-1/2 rounded-[100%] border-r-[2px]
@@ -150,11 +146,11 @@ sendTestRequest();`;
             shadow-[inset_20px_0_100px_rgba(16,185,129,0.2)] mix-blend-screen"
         />
 
-        <div className="absolute top-[10%] left-[30%] h-2 w-2 animate-pulse rounded-full bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.8)]" />
+        <div className="absolute left-[30%] top-[10%] h-2 w-2 animate-pulse rounded-full bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.8)]" />
         <div className="absolute bottom-[20%] left-[10%] h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.6)]" />
-        <div className="absolute top-[40%] right-[15%] h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.8)] duration-[3000ms]" />
+        <div className="absolute right-[15%] top-[40%] h-2.5 w-2.5 animate-bounce rounded-full bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.8)] duration-[3000ms]" />
         <div className="absolute bottom-[10%] right-[30%] h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.6)]" />
-        <div className="absolute top-[15%] right-[40%] h-1 w-1 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]" />
+        <div className="absolute right-[40%] top-[15%] h-1 w-1 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]" />
 
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iNDAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJub25lIi8+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjE1KSIvPjxjaXJjbGUgY3g9IjE4MCIgY3k9IjEyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjIpIi8+PGNpcmNsZSBjeD0iMzIwIiBjeT0iODAiIHI9IjEiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4xKSIvPjxjaXJjbGUgY3g9IjI1MCIgY3k9IjMyMCIgcj0iMSIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjI1KSIvPjxjaXJjbGUgY3g9IjkwIiBjeT0iMjgwIiByPSIxIiBmaWxsPSJyZ2JhLDI1NSwyNTUsMjU1LDAuMTUpIi8+PGNpcmNsZSBjeD0iMzcwIiBjeT0iMjIwIiByPSIxIiBmaWxsPSJyZ2JhLDI1NSwyNTUsMjU1LDAuMikiLz48L3N2Zz4=')] bg-[size:300px_300px] opacity-30" />
       </div>
@@ -202,7 +198,7 @@ sendTestRequest();`;
             </p>
             <p className="mt-2 text-sm font-semibold text-white">Copy credentials</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-400">
-              Get your Project ID and server API key from Project Settings.
+              Get your Project ID and service API key before you connect your app.
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-[#121215]/70 px-5 py-4 shadow-xl">
@@ -244,18 +240,22 @@ sendTestRequest();`;
               </div>
               <p className="mt-2 break-all text-sm font-semibold text-white">{resolvedProjectId}</p>
             </div>
+
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                Server API key
+                Service API key
               </p>
-              <p className="mt-2 text-sm font-semibold text-white">Copy from Project Settings</p>
+              <p className="mt-2 text-sm font-semibold text-white">
+                Create or copy from Profile Settings
+              </p>
               <Link
                 href={settingsHref}
                 className="mt-3 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300 transition-colors hover:bg-emerald-500/15"
               >
-                Open Project Settings
+                Open Profile Settings
               </Link>
             </div>
+
             <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
@@ -365,7 +365,7 @@ sendTestRequest();`;
               <p className="mt-1 text-xs font-medium text-slate-400">
                 {selectedMethod === "sdk"
                   ? "Put this near app startup so it runs before your first model call."
-                  : "Use a server API key with ingest access and send this from your backend."}
+                  : "Use a service API key with ingest access and send this from your backend."}
               </p>
             </div>
 
@@ -401,7 +401,8 @@ sendTestRequest();`;
                   Sample node preview
                 </p>
                 <p className="mt-1 text-xs font-medium text-slate-400">
-                  Example only. Your real node will appear here after one successful request.
+                  Connect your app, then send one real request from local or deployed code. A node
+                  like this will appear in Live View.
                 </p>
               </div>
               <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">
@@ -409,59 +410,46 @@ sendTestRequest();`;
               </span>
             </div>
 
-            <div className="mt-5 rounded-[28px] border border-emerald-500/15 bg-black/35 p-4 shadow-[0_0_40px_rgba(16,185,129,0.06)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-white">quick-test</p>
-                  <p className="text-xs text-slate-400">OpenAI · gpt-4</p>
-                </div>
-                <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">
-                  Healthy
-                </span>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                    Latency
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-white">182 ms</p>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                    Status
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-white">200</p>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                    Messages
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-white">2</p>
-                </div>
-                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                    Tool calls
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-white">0</p>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-white/5 bg-white/[0.03] p-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                  Example flow
-                </p>
-                <div className="mt-3 flex items-center gap-2 overflow-hidden">
-                  <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
-                    User
+            <div className="mt-5 flex justify-center rounded-[28px] border border-emerald-500/15 bg-black/35 p-6 shadow-[0_0_40px_rgba(16,185,129,0.06)]">
+              <div className="w-full max-w-[320px] rounded-[14px] border border-[#3A3A3C] bg-[#1C1C1E] p-4 shadow-lg">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="relative flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-[16px] border border-white/[0.1] bg-white/[0.04]">
+                    <div className="absolute inset-0 rounded-[16px] bg-gradient-to-b from-white/[0.05] to-transparent" />
+                    <svg
+                      width="22"
+                      height="22"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="relative z-10 text-emerald-400/80"
+                    >
+                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
                   </div>
-                  <div className="h-px flex-1 bg-gradient-to-r from-cyan-400/40 to-emerald-400/40" />
-                  <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">
-                    quick-test
+
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    <div className="mb-[3px] flex items-center gap-1">
+                      <span className="text-[8.5px] font-medium uppercase tracking-[0.18em] text-slate-600">
+                        Agent
+                      </span>
+                      <span className="text-[8px] text-slate-700/60">·</span>
+                    </div>
+                    <h3 className="truncate text-[13px] font-semibold leading-tight tracking-tight text-white/90">
+                      quick-test
+                    </h3>
+                    <p className="mt-0.5 truncate text-[11px] text-slate-600/80">gpt-4</p>
                   </div>
                 </div>
               </div>
             </div>
+
+            <p className="mt-4 text-xs leading-relaxed text-slate-500">
+              Preview only. Your real node name and model will reflect the request your app
+              actually sends.
+            </p>
           </aside>
         </section>
 
@@ -472,11 +460,11 @@ sendTestRequest();`;
           </summary>
           <ul className="mt-3 space-y-2 text-xs leading-relaxed text-slate-300">
             <li>Check that the Project ID matches this project.</li>
-            <li>Check that your server API key belongs to the same project.</li>
+            <li>Check that you are using a PluvianAI service API key, not a provider key.</li>
             <li>
               {selectedMethod === "sdk"
                 ? "Check that pluvianai.init() runs before your first real model call."
-                : "Check that your server API key has ingest access."}
+                : "Check that your service API key has ingest access."}
             </li>
           </ul>
         </details>
