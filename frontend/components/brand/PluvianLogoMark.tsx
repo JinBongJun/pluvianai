@@ -16,11 +16,11 @@ export default function PluvianLogoMark({ className = "" }: PluvianLogoMarkProps
       <path
         d="M6 17.5V12.1C6 8.3 8.9 5.5 12.5 5.5C16.1 5.5 19 8.3 19 12.1V17.5"
         stroke="#06b6d4"
-        strokeWidth="1.75"
+        strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="11.1" cy="9.1" r="1.15" fill="#10b981" />
+      <circle cx="11.1" cy="9.1" r="1.35" fill="#22d3ee" />
     </svg>
   );
 }
