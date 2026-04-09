@@ -712,7 +712,7 @@ Content-Type: application/json
                   using the button below.
                 </p>
                 <Link
-                  href="/settings/profile"
+                  href="/settings/profile#service-api-keys"
                   className="inline-flex items-center gap-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-4 py-2.5 text-sm font-bold text-amber-200 transition-all"
                 >
                   <KeyRound className="w-4 h-4" />
