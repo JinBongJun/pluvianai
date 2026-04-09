@@ -286,7 +286,7 @@ export default function DocsPage() {
               <p className="text-xs text-slate-500 leading-relaxed max-w-3xl mt-4">
                 <strong className="text-slate-300">Release Gate</strong> run views may surface
                 additional signals (for example <span className="font-mono text-slate-400">tool_grounding</span>{" "}
-                / ?�Tool Result Grounding?? that are computed during compare/replay ??they are not
+                / ?쏷ool Result Grounding?? that are computed during compare/replay ??they are not
                 extra rows in the Live View Evaluation matrix above.
               </p>
             </div>
@@ -312,7 +312,7 @@ export default function DocsPage() {
                   Apply to every agent in the project (baseline guardrails).
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Use for org-wide safety: block dangerous tools, enforce ?�search before answer??
+                  Use for org-wide safety: block dangerous tools, enforce ?쐓earch before answer??
                   set required schema for critical actions.
                 </p>
               </div>
@@ -322,7 +322,7 @@ export default function DocsPage() {
                   Only apply when validating traces that include a specific agent id.
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Use when one agent has special permissions (e.g., ?�payments_agent??can call
+                  Use when one agent has special permissions (e.g., ?쐏ayments_agent??can call
                   billing tools; others cannot).
                 </p>
                 <p className="mt-2 text-xs text-slate-500">
@@ -342,7 +342,7 @@ export default function DocsPage() {
                 </p>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/20 p-4 md:col-span-2">
-                <h5 className="text-sm font-black text-white">4) What is a ?�Tool??</h5>
+                <h5 className="text-sm font-black text-white">4) What is a ?쏷ool??</h5>
                 <p className="mt-2 text-xs text-slate-400">
                   In PluvianAI, a tool is a{" "}
                   <span className="text-white font-semibold">named action</span> the agent requests
@@ -364,7 +364,7 @@ export default function DocsPage() {
                 </ul>
                 <p className="mt-3 text-xs text-slate-500">
                   Recommendation: start with LLM tool calls. Add lightweight instrumentation only
-                  for ?�must be correct??tools (payments, secrets, outbound side-effects).
+                  for ?쐌ust be correct??tools (payments, secrets, outbound side-effects).
                 </p>
               </div>
             </div>
@@ -380,7 +380,7 @@ export default function DocsPage() {
                   tool is called outside the allowlist.
                 </li>
                 <li>
-                  <span className="text-slate-300 font-semibold">tool_order</span>: enforce ?�A must
+                  <span className="text-slate-300 font-semibold">tool_order</span>: enforce ?쏛 must
                   happen before B??
                 </li>
                 <li>
@@ -403,7 +403,7 @@ export default function DocsPage() {
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="rounded-lg border border-white/10 bg-black/30 p-3">
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
-                    Project Default · Forbidden
+                    Project Default 쨌 Forbidden
                   </div>
                   <pre className="text-[10px] font-mono leading-relaxed text-emerald-300 whitespace-pre-wrap">
                     {`{
@@ -421,7 +421,7 @@ export default function DocsPage() {
                 </div>
                 <div className="rounded-lg border border-white/10 bg-black/30 p-3">
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">
-                    Agent Override · Allowlist
+                    Agent Override 쨌 Allowlist
                   </div>
                   <pre className="text-[10px] font-mono leading-relaxed text-emerald-300 whitespace-pre-wrap">
                     {`{
@@ -684,7 +684,7 @@ Content-Type: application/json
             </div>
           </div>
 
-          {/* ?�의: ??종류??API ??*/}
+          {/* ?좎쓽: ??醫낅쪟??API ??*/}
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 max-w-4xl">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0 mt-0.5" />
@@ -1522,7 +1522,7 @@ Content-Type: application/json
         <div className="space-y-8">
           <p className="text-xl text-slate-400 leading-relaxed max-w-4xl">
             In the product UI this is the <strong className="text-slate-200">Policy</strong> tab on
-            an agent in Live View (older docs may say ?�Logic Guard??. Define rule-based policies on
+            an agent in Live View (older docs may say ?쏬ogic Guard??. Define rule-based policies on
             tool usage and trace structure: forbidden tools, allowlists, ordering, and argument
             schemas ??enforced in Release Gate, Live Logs, and CI-style gates.
           </p>
@@ -1680,7 +1680,7 @@ Content-Type: application/json
           <RobotBirdIcon size={24} className="opacity-50" />
         </div>
         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600">
-          PluvianAI ??Node-Level Regression Guard. © 2026 PluvianAI Inc. <br />
+          PluvianAI ??Node-Level Regression Guard. 짤 2026 PluvianAI Inc. <br />
           Documentation v1.0
         </p>
       </footer>
