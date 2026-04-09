@@ -29,7 +29,6 @@ import PricingSection from "@/components/landing/PricingSection";
 import InteractiveHoverText from "@/components/ui/InteractiveHoverText";
 import SilkGradientBg from "@/components/landing/SilkGradientBg";
 import { useAuthSession } from "@/hooks/useAuthSession";
-import PluvianLogoMark from "@/components/brand/PluvianLogoMark";
 
 export default function Home() {
   const { isAuthenticated: isLoggedIn } = useAuthSession();
@@ -52,7 +51,20 @@ export default function Home() {
         <div className="w-full px-6 md:px-12 lg:px-16 h-[90px] flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative w-16 h-16 pointer-events-none select-none hover:scale-105 transition-transform duration-300 flex items-center justify-center">
-              <PluvianLogoMark className="h-full w-full drop-shadow-[0_0_18px_rgba(6,182,212,0.45)]" />
+              <svg
+                viewBox="0 0 100 100"
+                className="w-full h-full drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]"
+              >
+                <path
+                  d="M20 50 C 20 20, 80 20, 80 50 L 80 80 L 20 80 Z"
+                  fill="none"
+                  stroke="#06b6d4"
+                  strokeWidth="4"
+                  className="animate-pulse"
+                />
+                <circle cx="40" cy="45" r="5" fill="#10b981" />
+                <path d="M60 60 L 90 40" stroke="#10b981" strokeWidth="2.5" />
+              </svg>
             </div>
             <span className="text-3xl font-black tracking-tighter text-white uppercase transition-colors group-hover:text-emerald-400">
               PLUVIANAI
