@@ -4,13 +4,14 @@ import {
   getSnapshotDetailFixtureCase,
   snapshotDetailFixtureCases,
 } from "@/lib/test-fixtures/snapshot-detail";
-export default function SnapshotDetailFixturesPage({
+export default async function SnapshotDetailFixturesPage({
   searchParams,
 }: {
-  searchParams?: { case?: string };
+  searchParams?: Promise<{ case?: string }>;
 }) {
+  const resolvedSearchParams = await searchParams;
   const activeCase = getSnapshotDetailFixtureCase(
-    searchParams?.case ?? defaultSnapshotDetailFixtureCaseId
+    resolvedSearchParams?.case ?? defaultSnapshotDetailFixtureCaseId
   );
 
   return <FixtureViewer activeCase={activeCase} allCases={snapshotDetailFixtureCases} />;

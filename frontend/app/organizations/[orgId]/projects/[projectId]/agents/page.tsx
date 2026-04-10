@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation";
 
-export default function Page({ params }: { params: { orgId: string; projectId: string } }) {
-  redirect(`/organizations/${params.orgId}/projects/${params.projectId}/live-view`);
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ orgId: string; projectId: string }>;
+}) {
+  const { orgId, projectId } = await params;
+  redirect(`/organizations/${orgId}/projects/${projectId}/live-view`);
 }

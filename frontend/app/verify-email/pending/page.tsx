@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { authAPI } from "@/lib/api";
 
-export default function VerifyEmailPendingPage() {
+function VerifyEmailPendingPageContent() {
   const searchParams = useSearchParams();
   const email = (searchParams.get("email") || "").trim();
   const [isSending, setIsSending] = useState(false);
@@ -78,5 +78,13 @@ export default function VerifyEmailPendingPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function VerifyEmailPendingPage() {
+  return (
+    <Suspense fallback={null}>
+      <VerifyEmailPendingPageContent />
+    </Suspense>
   );
 }

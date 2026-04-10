@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 
 interface OrganizationPageProps {
-  params: {
+  params: Promise<{
     orgId: string;
-  };
+  }>;
 }
 
-export default function OrganizationPage({ params }: OrganizationPageProps) {
-  redirect(`/organizations/${params.orgId}/projects`);
+export default async function OrganizationPage({ params }: OrganizationPageProps) {
+  const { orgId } = await params;
+  redirect(`/organizations/${orgId}/projects`);
 }

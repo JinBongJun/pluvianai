@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import useSWR from "swr";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -21,7 +21,7 @@ import {
 } from "@/lib/projectRouteScope";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
-export default function ProjectGeneralSettingsPage() {
+function ProjectGeneralSettingsPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -384,5 +384,13 @@ export default function ProjectGeneralSettingsPage() {
         </div>
       )}
     </ProjectSettingsShell>
+  );
+}
+
+export default function ProjectGeneralSettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProjectGeneralSettingsPageContent />
+    </Suspense>
   );
 }
