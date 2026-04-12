@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Any, Tuple
 import secrets
 import hmac
-from jose import JWTError, jwt
-from jose.exceptions import ExpiredSignatureError
+import jwt
+from jwt import ExpiredSignatureError, InvalidTokenError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Header, Request
 from fastapi.security import OAuth2PasswordBearer
@@ -91,10 +91,10 @@ def decode_token(token: str) -> Optional[dict]:
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
-            options={"leeway": 300}  # Increase leeway to 5 minutes
+            leeway=300,
         )
         return payload
-    except JWTError as e:
+    except InvalidTokenError as e:
         error_msg = str(e)
         logger.error(f"🔴 [decode_token] JWT Error: {error_msg}")
         # Log specific reasons for failure
@@ -114,7 +114,7 @@ def decode_token_or_raise(token: str, *, expected_type: Optional[str] = None) ->
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
-            options={"leeway": 300},
+            leeway=300,
         )
     except ExpiredSignatureError as exc:
         code = f"{expected_type}_token_expired" if expected_type else "auth_token_expired"
@@ -123,7 +123,7 @@ def decode_token_or_raise(token: str, *, expected_type: Optional[str] = None) ->
             message="Your session has expired. Please sign in again.",
             log_reason=str(exc),
         ) from exc
-    except JWTError as exc:
+    except InvalidTokenError as exc:
         code = f"{expected_type}_token_invalid" if expected_type else "auth_token_invalid"
         raise TokenValidationError(
             code=code,

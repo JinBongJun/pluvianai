@@ -5,7 +5,8 @@ from urllib.parse import urlencode
 import secrets
 
 import httpx
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError
 
 from app.core.config import settings
 
@@ -74,7 +75,7 @@ class GoogleOAuthService:
                 settings.SECRET_KEY,
                 algorithms=[settings.ALGORITHM],
             )
-        except JWTError:
+        except InvalidTokenError:
             return None, "invalid_state"
         if payload.get("type") != "google_oauth_state":
             return None, "invalid_state"

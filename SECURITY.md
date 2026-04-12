@@ -188,3 +188,16 @@ The following event types are either:
 
 This keeps the security story **discoverable and realistic**, instead of drifting away from the actual code.
 
+---
+
+## 5. Dependency Hygiene Notes
+
+- As of 2026-04-12, backend JWT handling uses **PyJWT** instead of `python-jose`.
+- Reason:
+  - `python-jose` pulled in `ecdsa` as a transitive dependency.
+  - The audited Python 3.11 dependency set showed one remaining advisory in `ecdsa` (`CVE-2024-23342` / `GHSA-wj6h-64fc-37mp`) with no fix version published in the advisory data used by `pip-audit`.
+  - Our backend currently uses only symmetric JWT signing (`HS256`), so migrating to PyJWT removed that unnecessary dependency path.
+- Current expectation:
+  - For app-issued session tokens, keep JWT usage limited to the configured symmetric algorithm in `backend/app/core/config.py`.
+  - If asymmetric JWT/JWK support is introduced later, the dependency choice and threat model should be reviewed again in the same change.
+
