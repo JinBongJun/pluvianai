@@ -1,5 +1,4 @@
 /** @type {import('next').NextConfig} */
-const { withSentryConfig } = require("@sentry/nextjs");
 
 const isProduction = process.env.NODE_ENV === "production";
 const scriptSrc = ["'self'", "'unsafe-inline'", "https:"];
@@ -44,6 +43,7 @@ const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
+  outputFileTracingRoot: __dirname,
   images: {
     domains: [],
     formats: ["image/avif", "image/webp"],
@@ -62,15 +62,9 @@ const nextConfig = {
   // Code splitting optimization
   experimental: {
     optimizePackageImports: ["lucide-react"],
-    // Enable instrumentation hook for Sentry
-    instrumentationHook: false,
   },
   // Compress output
   compress: true,
-  // Production optimizations
-  swcMinify: true,
-  // Optimize fonts
-  optimizeFonts: true,
 };
 
 // Wrap Next.js config with Sentry

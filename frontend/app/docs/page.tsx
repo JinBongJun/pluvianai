@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -39,7 +39,7 @@ interface ContentItem {
   content: React.ReactNode;
 }
 
-export default function DocsPage() {
+function DocsPageContent() {
   const searchParams = useSearchParams();
   const [activeSection, setActiveSection] = useState<SectionId>("introduction");
 
@@ -1685,5 +1685,13 @@ Content-Type: application/json
         </p>
       </footer>
     </div>
+  );
+}
+
+export default function DocsPage() {
+  return (
+    <Suspense fallback={null}>
+      <DocsPageContent />
+    </Suspense>
   );
 }

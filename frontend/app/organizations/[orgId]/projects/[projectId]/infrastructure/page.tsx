@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import ProjectLayout from "@/components/layout/ProjectLayout";
@@ -28,7 +28,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import clsx from "clsx";
 import Button from "@/components/ui/Button";
 
-export default function InfrastructureHubPage() {
+function InfrastructureHubPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -366,5 +366,13 @@ monitor.start(
         </div>
       </div>
     </ProjectLayout>
+  );
+}
+
+export default function InfrastructureHubPage() {
+  return (
+    <Suspense fallback={null}>
+      <InfrastructureHubPageContent />
+    </Suspense>
   );
 }

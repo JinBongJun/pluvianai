@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useSWRConfig } from "swr";
 import { billingAPI } from "@/lib/api";
 import { useToast } from "@/components/ToastContainer";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import clsx from "clsx";
 import {
   getPaddleCheckoutState,
@@ -57,7 +57,7 @@ type UsageResponse = {
   };
 };
 
-export default function AccountBillingPage() {
+function AccountBillingPageContent() {
   const hasToken = useRequireAuth();
   const toast = useToast();
   const pathname = usePathname();
@@ -482,3 +482,10 @@ export default function AccountBillingPage() {
   );
 }
 
+export default function AccountBillingPage() {
+  return (
+    <Suspense fallback={null}>
+      <AccountBillingPageContent />
+    </Suspense>
+  );
+}

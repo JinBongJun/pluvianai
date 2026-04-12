@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { authAPI, settingsAPI } from "@/lib/api";
@@ -48,7 +48,7 @@ type AccountUsage = {
   current_period_end?: string | null;
 };
 
-export default function ProfileSettingsPage() {
+function ProfileSettingsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -748,5 +748,13 @@ export default function ProfileSettingsPage() {
         </section>
       </div>
     </AccountLayout>
+  );
+}
+
+export default function ProfileSettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProfileSettingsPageContent />
+    </Suspense>
   );
 }

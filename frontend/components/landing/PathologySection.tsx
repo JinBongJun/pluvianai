@@ -7,9 +7,9 @@ import { Brain, FileQuestion, Activity } from "lucide-react";
 const pathologies = [
   {
     id: "regression",
-    title: "Silent agent regressions",
+    title: "Behavior drifts you can’t see",
     description:
-      "You tweak prompts or swap models. A week later, support tickets spike — but all you see are long JSON blobs and token graphs. There's no clear “this is how the agent used to think vs now.”",
+      "Prompt and model changes quietly shift how agents behave. You usually notice only after users do.",
     icon: Brain,
     color: "text-red-500",
     borderColor: "group-hover:border-red-500/50",
@@ -18,9 +18,9 @@ const pathologies = [
   },
   {
     id: "baseline",
-    title: "No baseline for healthy behavior",
+    title: "No real baseline to compare against",
     description:
-      "Every change is judged by gut feel. There is no fixed baseline run of real production traces to compare against, so “did we break anything?” turns into a guessing game in Slack threads.",
+      "Without a stable baseline, every change becomes a guessing game. You end up debating behavior instead of checking it.",
     icon: FileQuestion,
     color: "text-orange-500",
     borderColor: "group-hover:border-orange-500/50",
@@ -29,9 +29,9 @@ const pathologies = [
   },
   {
     id: "gate",
-    title: "No real gate before deploy",
+    title: "No pass/fail gate on production traces",
     description:
-      "CI says tests are green, but none of them replay your actual production conversations under the new config. There’s no pass/fail gate that runs on real traces and tells you, “this agent is safe to ship.”",
+      "CI can be green while real traces still fail in production. You need a gate that replays production behavior before deploy.",
     icon: Activity,
     color: "text-yellow-500",
     borderColor: "group-hover:border-yellow-500/50",
@@ -62,7 +62,6 @@ const cardVariants = {
 export default function PathologySection() {
   return (
     <section id="problem" className="py-32 relative bg-transparent overflow-hidden">
-      {/* Background Abstract Typography/Shape */}
       <div className="absolute top-[10%] right-[-5%] text-[400px] font-black text-white/[0.02] pointer-events-none select-none leading-none tracking-tighter mix-blend-screen blur-[2px]">
         01
       </div>
@@ -72,15 +71,15 @@ export default function PathologySection() {
         <div className="max-w-3xl mb-20">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold uppercase tracking-widest mb-6 border border-emerald-500/20">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            We help you catch regressions before they ship.
+            Real-trace regression checks
           </div>
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
             Agent behavior drifts. <br />
-            <span className="text-slate-500">Catch it before you deploy.</span>
+            <span className="text-slate-500">Catch it before you ship.</span>
           </h2>
           <p className="text-xl text-slate-400 leading-relaxed max-w-2xl">
-            Model and prompt changes cause silent regressions. Without a baseline and a real gate on
-            production traces, you&apos;re guessing.
+            Model and prompt changes can break consistency. Without a real baseline and a pass/fail
+            gate on production traces, you&apos;re guessing.
           </p>
         </div>
 
@@ -91,17 +90,15 @@ export default function PathologySection() {
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
         >
-          {pathologies.map((pathology, index) => (
+          {pathologies.map((pathology) => (
             <motion.div
               key={pathology.id}
               variants={cardVariants}
               whileHover={{ scale: 1.02 }}
-              className={`group relative p-8 md:p-10 rounded-[32px] bg-[#121215]/95 backdrop-blur-xl border border-white/10 transition-all duration-500 hover:border-white/20 shadow-2xl overflow-hidden`}
+              className="group relative p-8 md:p-10 rounded-[32px] bg-[#121215]/95 backdrop-blur-xl border border-white/10 transition-all duration-500 hover:border-white/20 shadow-2xl overflow-hidden"
             >
-              {/* Bottom Right Glow Element */}
               <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-emerald-500/10 group-hover:bg-emerald-500/20 blur-[60px] rounded-full transition-all duration-500 pointer-events-none" />
 
-              {/* Top Right Arrow Button (Figma Style) */}
               <div className="absolute top-6 md:top-8 right-6 md:right-8 w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-black opacity-90 group-hover:scale-105 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] z-10">
                 <svg
                   className="w-5 h-5 -rotate-45"
@@ -120,9 +117,7 @@ export default function PathologySection() {
               </div>
 
               <div className="relative z-10">
-                <div
-                  className={`w-14 h-14 rounded-full flex items-center justify-center mb-8 bg-white/5 border border-white/10 group-hover:scale-110 transition-transform duration-500 text-emerald-400`}
-                >
+                <div className="w-14 h-14 rounded-full flex items-center justify-center mb-8 bg-white/5 border border-white/10 group-hover:scale-110 transition-transform duration-500 text-emerald-400">
                   <pathology.icon className="w-7 h-7" />
                 </div>
 

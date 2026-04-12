@@ -35,7 +35,7 @@ const updateProjectSchema = z.object({
 export async function createProjectAction(
   formData: FormData
 ): Promise<ActionState<{ id: number; name: string }>> {
-  const token = cookies().get("access_token")?.value;
+  const token = (await cookies()).get("access_token")?.value;
   if (!token) {
     return errorResponse("Authentication required");
   }
@@ -98,7 +98,7 @@ export async function updateProjectAction(
   projectId: number,
   formData: FormData
 ): Promise<ActionState<{ id: number; name: string }>> {
-  const token = cookies().get("access_token")?.value;
+  const token = (await cookies()).get("access_token")?.value;
   if (!token) {
     return errorResponse("Authentication required");
   }
@@ -154,7 +154,7 @@ export async function updateProjectAction(
  * Delete project Server Action
  */
 export async function deleteProjectAction(projectId: number): Promise<ActionState<void>> {
-  const token = cookies().get("access_token")?.value;
+  const token = (await cookies()).get("access_token")?.value;
   if (!token) {
     return errorResponse("Authentication required");
   }

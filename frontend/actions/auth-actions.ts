@@ -48,11 +48,12 @@ function generateCsrfToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-function setAuthCookies(accessToken: string, refreshToken: string): void {
+async function setAuthCookies(accessToken: string, refreshToken: string): Promise<void> {
   const csrfToken = generateCsrfToken();
   const secure = process.env.NODE_ENV === "production";
+  const cookieStore = await cookies();
 
-  cookies().set("access_token", accessToken, {
+  cookieStore.set("access_token", accessToken, {
     httpOnly: true,
     secure,
     sameSite: "lax",
@@ -60,7 +61,7 @@ function setAuthCookies(accessToken: string, refreshToken: string): void {
     domain: AUTH_COOKIE_DOMAIN,
     maxAge: getTokenMaxAge(accessToken, DEFAULT_ACCESS_TOKEN_MAX_AGE_SEC),
   });
-  cookies().set("refresh_token", refreshToken, {
+  cookieStore.set("refresh_token", refreshToken, {
     httpOnly: true,
     secure,
     sameSite: "lax",
@@ -68,7 +69,7 @@ function setAuthCookies(accessToken: string, refreshToken: string): void {
     domain: AUTH_COOKIE_DOMAIN,
     maxAge: getTokenMaxAge(refreshToken, DEFAULT_REFRESH_TOKEN_MAX_AGE_SEC),
   });
-  cookies().set(CSRF_COOKIE_NAME, csrfToken, {
+  cookieStore.set(CSRF_COOKIE_NAME, csrfToken, {
     httpOnly: false,
     secure,
     sameSite: "lax",
@@ -78,10 +79,12 @@ function setAuthCookies(accessToken: string, refreshToken: string): void {
   });
 }
 
-function clearAuthCookies(): void {
-  cookies().delete({ name: "access_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
-  cookies().delete({ name: "refresh_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
-  cookies().delete({ name: CSRF_COOKIE_NAME, path: "/", domain: AUTH_COOKIE_DOMAIN });
+async function clearAuthCookies(): Promise<void> {
+  const cookieStore = await cookies();
+
+  cookieStore.delete({ name: "access_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
+  cookieStore.delete({ name: "refresh_token", path: "/", domain: AUTH_COOKIE_DOMAIN });
+  cookieStore.delete({ name: CSRF_COOKIE_NAME, path: "/", domain: AUTH_COOKIE_DOMAIN });
 }
 
 // ===== Zod schemas =====
@@ -171,7 +174,7 @@ export async function loginAction(
       logger.error("Failed to decode access token after login", error);
     }
 
-    setAuthCookies(access_token, refresh_token);
+    await setAuthCookies(access_token, refresh_token);
 
     return formSuccessResponse({
       access_token,
@@ -266,7 +269,7 @@ export async function registerAction(
     const { access_token, refresh_token } = loginData;
 
     // 5. Store tokens in cookies
-    setAuthCookies(access_token, refresh_token);
+    await setAuthCookies(access_token, refresh_token);
 
     // Include tokens in return payload (for client-side localStorage usage)
     return formSuccessResponse({ user_id: userData.id, authenticated: true });
@@ -290,7 +293,7 @@ export async function registerAction(
  * Deletes cookies and redirects to the login page.
  */
 export async function logoutAction(): Promise<void> {
-  clearAuthCookies();
+  await clearAuthCookies();
   redirect("/login");
 }
 
@@ -298,7 +301,7 @@ export async function logoutAction(): Promise<void> {
  * Fetch current user info (used by Server Components)
  */
 export async function getCurrentUser() {
-  const token = cookies().get("access_token")?.value;
+  const token = (await cookies()).get("access_token")?.value;
 
   if (!token) {
     return null;

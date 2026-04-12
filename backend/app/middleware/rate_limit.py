@@ -300,13 +300,14 @@ def _extract_user_id_from_request(request: Request) -> Optional[str]:
     if not token or token.startswith("ag_live_") or token.startswith("ag_test_"):
         return None
     try:
-        from jose import jwt, JWTError
+        import jwt
         from app.core.config import settings
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
-            options={"verify_aud": False, "leeway": 60},
+            options={"verify_aud": False},
+            leeway=60,
         )
         if payload.get("type") != "access":
             return None

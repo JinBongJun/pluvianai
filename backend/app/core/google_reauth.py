@@ -4,7 +4,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Response
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 
 from app.core.config import settings
 
@@ -31,7 +32,7 @@ def has_valid_google_delete_reauth_token(token: Optional[str], user_id: int) -> 
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    except JWTError:
+    except InvalidTokenError:
         return False
 
     return payload.get("type") == GOOGLE_DELETE_REAUTH_TOKEN_TYPE and payload.get("sub") == str(user_id)
