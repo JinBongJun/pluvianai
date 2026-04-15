@@ -14,7 +14,7 @@ python-multipart==0.0.22
 redis==7.3.0
 httpx==0.28.1
 reportlab==4.0.7
-resend==2.1.0
+resend==2.28.0
 apscheduler==3.11.2
 sentry-sdk[fastapi]==1.45.1
 prometheus-client==0.25.0
