@@ -35,7 +35,7 @@
     "gray-matter": "^4.0.3",
     "lucide-react": "^0.562.0",
     "next": "^15.5.15",
-    "playwright": "^1.58.2",
+    "playwright": "^1.59.1",
     "postcss": "^8.5.9",
     "posthog-js": "^1.369.0",
     "react": "^18.2.0",
