@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
-from pydantic import BaseModel, ConfigDict, Field
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import (
@@ -31,6 +30,16 @@ from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.validation_dataset import ValidationDataset
+from app.schemas.projects import (
+    PanicModeResponse,
+    PanicModeUpdate,
+    ProjectCreate,
+    ProjectPatch,
+    ProjectResponse,
+    ProjectUpdate,
+    RubricCreate,
+    RubricResponse,
+)
 from app.infrastructure.repositories.exceptions import EntityAlreadyExistsError
 
 # Repository 패턴 사용 예시 (주석으로 추가)
@@ -56,47 +65,6 @@ def _invalidate_project_list_caches_for_project(db: Session, project_id: int, ow
 
     for user_id in user_ids:
         cache_service.invalidate_user_projects_cache(user_id)
-
-
-class ProjectCreate(BaseModel):
-    """Project creation schema (Design 5.1.5)"""
-
-    name: str = Field(..., min_length=1, max_length=255, description="Project name")
-    description: str | None = Field(None, max_length=1000, description="Project description")
-    generate_sample_data: bool = Field(False, description="Generate sample data for onboarding")
-    organization_id: int | None = Field(None, description="Organization ID this project belongs to")
-    usage_mode: str = Field("full", description="Usage mode: 'full' (Live View + Test Lab) or 'test_only' (Test Lab only)")
-
-
-class ProjectUpdate(BaseModel):
-    """Project update schema (Design 5.1.5: usage_mode upgrade)"""
-
-    name: str | None = Field(None, min_length=1, max_length=255, description="Project name")
-    description: str | None = Field(None, max_length=1000, description="Project description")
-    global_block: bool | None = Field(None, description="Enable global block (panic mode) for this project")
-    usage_mode: str | None = Field(None, description="Usage mode: 'full' or 'test_only' (upgrade to Full Mode)")
-    diagnostic_config: dict | None = Field(None, description="Diagnostic thresholds for the 12 factors")
-
-
-class ProjectResponse(BaseModel):
-    """Project response schema"""
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    description: str | None
-    owner_id: int
-    is_active: bool
-    role: str | None = None  # user's role in this project
-    org_role: str | None = None  # user's role in the parent organization
-    access_source: str | None = None  # owned | project_member | organization_member
-    created_by_me: bool | None = None
-    has_project_access: bool | None = None
-    owner_name: str | None = None
-    entitlement_scope: str | None = None
-    organization_id: int | None = None  # organization this project belongs to
-    usage_mode: str = "full"  # "full" | "test_only" (Design 5.1.5)
-    diagnostic_config: dict | None = {}
 
 
 def _build_project_response(project: Project, current_user: User, db: Session) -> ProjectResponse:
@@ -265,7 +233,9 @@ async def list_projects(
     cache_key = cache_service.project_list_key(current_user.id)
     cached = cache_service.get(cache_key)
     if cached:
-        return cached
+        if isinstance(cached, list) and all(isinstance(item, dict) for item in cached):
+            return cached
+        cache_service.delete(cache_key)
 
     # Use service to get projects
     all_projects = project_service.get_projects_for_user(
@@ -280,7 +250,7 @@ async def list_projects(
     ]
 
     # Cache result (5 minutes TTL)
-    cache_service.set(cache_key, result, ttl=300)
+    cache_service.set(cache_key, [item.model_dump() for item in result], ttl=300)
 
     return result
 
@@ -476,17 +446,6 @@ async def delete_project(
     return None
 
 
-class PanicModeUpdate(BaseModel):
-    """Panic mode update schema"""
-    enabled: bool
-
-
-class PanicModeResponse(BaseModel):
-    """Panic mode response schema"""
-    project_id: int
-    enabled: bool
-
-
 # Panic Mode (Global Block) - Emergency kill switch for all API calls in a project
 @router.post("/{project_id}/panic", response_model=PanicModeResponse)
 @handle_errors
@@ -539,24 +498,6 @@ async def get_panic_mode(
     # Evaluation Rubrics
 from app.models.evaluation_rubric import EvaluationRubric
 
-class RubricCreate(BaseModel):
-    name: str = Field(..., max_length=255)
-    description: Optional[str] = None
-    criteria_prompt: str
-    min_score: int = 1
-    max_score: int = 5
-
-class RubricResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    description: Optional[str]
-    criteria_prompt: str
-    min_score: int
-    max_score: int
-    is_active: bool
-
 @router.post("/{project_id}/rubrics", response_model=RubricResponse)
 @handle_errors
 async def create_rubric(
@@ -591,13 +532,6 @@ async def list_rubrics(
     """List all evaluation rubrics for a project"""
     check_project_access(project_id, current_user, db)
     return rubric_repo.find_by_project_id(project_id, active_only=False)
-
-
-class ProjectPatch(BaseModel):
-    """Schema for applying a configuration patch from Test Lab"""
-    nodes: List[dict] = Field(..., description="List of nodes in the patched configuration")
-    edges: List[dict] = Field(..., description="List of edges in the patched configuration")
-    version: str | None = Field(None, description="Optional version name for the patch")
 
 
 @router.post("/{project_id}/apply-patch", response_model=ProjectResponse)
