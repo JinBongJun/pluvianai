@@ -1,15 +1,14 @@
 import asyncio
 import json
-from typing import List, Optional, Any, Dict
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
-from pydantic import BaseModel, ConfigDict, Field
-from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import get_current_user, get_current_user_or_api_key, RequireScope
 from app.core.dependencies import get_api_call_service
+from app.schemas.api_calls import APICallIngestBody, APICallResponse
 from app.models.user import User
 from app.core.permissions import check_project_access
 from app.services.data_normalizer import DataNormalizer
@@ -22,40 +21,6 @@ from app.utils.ingest_observability import request_data_shape_summary
 router = APIRouter()
 
 # Path prefix when mounted: /projects (full path e.g. /api/v1/projects/{project_id}/api-calls)
-
-
-class APICallIngestBody(BaseModel):
-    """SDK ingest: same shape as SDK sends. project_id can be omitted when provided in path.
-
-    Limits: ``tool_events`` normalized to max 50 events per call; per-event JSON size capped server-side
-    (see ``app.utils.tool_events``). See ``docs/live-view-ingest-field-matrix.md``.
-    """
-    project_id: Optional[int] = Field(None, description="Project ID (must match path if provided)")
-    request_data: Dict[str, Any] = Field(default_factory=dict, description="LLM request payload")
-    response_data: Dict[str, Any] = Field(default_factory=dict, description="LLM response payload")
-    latency_ms: float = Field(0.0, description="Latency in ms")
-    status_code: int = Field(200, description="HTTP status code")
-    agent_name: Optional[str] = None
-    chain_id: Optional[str] = None
-    tool_events: Optional[List[Dict[str, Any]]] = Field(
-        None,
-        description="Optional tool_call/tool_result/action timeline from the client (see docs/release-gate-tool-io-grounding-plan.md)",
-    )
-
-
-class APICallResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    project_id: int
-    provider: Optional[str] = None
-    model: Optional[str] = None
-    agent_name: Optional[str] = None
-    total_tokens: Optional[int] = None
-    cost: Optional[float] = None
-    latency_ms: Optional[int] = None
-    status_code: Optional[int] = None
-    created_at: datetime
 
 @router.get("/{project_id}/api-calls/stats")
 def get_api_call_stats(

@@ -2,9 +2,8 @@
 User API Key endpoints for managing user-provided API keys
 """
 
-from typing import List, Optional
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -15,31 +14,10 @@ from app.core.responses import success_response
 from app.core.logging_config import logger
 from app.core.dependencies import get_audit_service
 from app.models.user import User
+from app.schemas.user_api_keys import CreateUserApiKeyRequest, UserApiKeyResponse
 from app.services.user_api_key_service import UserApiKeyService
 
 router = APIRouter()
-
-
-class CreateUserApiKeyRequest(BaseModel):
-    """Create user API key request"""
-    provider: str  # openai, anthropic, google
-    api_key: str  # Plain API key (will be encrypted)
-    name: Optional[str] = None
-    agent_id: Optional[str] = None
-
-
-class UserApiKeyResponse(BaseModel):
-    """User API key response (without decrypted key)"""
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    project_id: int
-    agent_id: Optional[str]
-    provider: str
-    name: Optional[str]
-    is_active: bool
-    created_at: str
-    key_hint: Optional[str] = None
 
 @router.post("")
 @handle_errors

@@ -5,7 +5,6 @@ Billing endpoints (Paddle checkout + webhook + usage helpers).
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, Request, status
-from pydantic import BaseModel, HttpUrl
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -17,19 +16,10 @@ from app.core.security import (
 )
 from app.core.subscription_limits import normalize_plan_type
 from app.models.user import User
+from app.schemas.billing import ChangePlanRequest, CheckoutRequest
 from app.services.billing_service import BillingService
 
 router = APIRouter()
-
-
-class CheckoutRequest(BaseModel):
-    plan_type: str
-    success_url: HttpUrl
-    cancel_url: HttpUrl
-
-
-class ChangePlanRequest(BaseModel):
-    plan_type: str
 
 
 @router.get("/usage")
