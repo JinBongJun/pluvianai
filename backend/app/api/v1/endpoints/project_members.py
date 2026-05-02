@@ -3,10 +3,8 @@ Project Members management for Pluvian Sentinel
 """
 
 from typing import List
-from enum import Enum
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, ProjectRole
@@ -22,56 +20,9 @@ from app.models.user import User
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.organization import OrganizationMember
+from app.schemas.project_members import ProjectMemberCreate, ProjectMemberResponse, ProjectMemberUpdate
 
 router = APIRouter()
-
-
-class MemberRole(str, Enum):
-    """Member role enum"""
-
-    ADMIN = "admin"
-    MEMBER = "member"
-    VIEWER = "viewer"
-
-
-class ProjectMemberCreate(BaseModel):
-    """Project member creation schema"""
-
-    user_email: EmailStr = Field(..., description="User email address")
-    role: MemberRole = Field(..., description="Member role (admin, member, viewer)")
-
-    @field_validator("role")
-    @classmethod
-    def validate_role(cls, v):
-        if v not in [MemberRole.ADMIN, MemberRole.MEMBER, MemberRole.VIEWER]:
-            raise ValueError("Role must be one of: admin, member, viewer")
-        return v
-
-
-class ProjectMemberUpdate(BaseModel):
-    """Project member update schema"""
-
-    role: MemberRole = Field(..., description="Member role (admin, member, viewer)")
-
-    @field_validator("role")
-    @classmethod
-    def validate_role(cls, v):
-        if v not in [MemberRole.ADMIN, MemberRole.MEMBER, MemberRole.VIEWER]:
-            raise ValueError("Role must be one of: admin, member, viewer")
-        return v
-
-
-class ProjectMemberResponse(BaseModel):
-    """Project member response schema"""
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    project_id: int
-    user_id: int
-    user_email: str
-    user_name: str | None
-    role: str
-    created_at: str
 
 
 def _project_inherits_org_roles(project: Project) -> bool:

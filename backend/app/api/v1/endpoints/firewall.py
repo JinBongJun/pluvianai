@@ -1,49 +1,17 @@
-from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, check_project_write_access
 from app.models.user import User
-from app.models.firewall_rule import FirewallRule, FirewallRuleType, FirewallAction, FirewallSeverity
-from app.services.firewall_service import firewall_service
+from app.models.firewall_rule import FirewallRule
+from app.schemas.firewall import FirewallRuleCreate, FirewallRuleResponse, FirewallRuleUpdate
 
 router = APIRouter()
 
 # Path prefix when mounted: /projects (full path e.g. /api/v1/projects/{project_id}/firewall/rules)
-
-
-class FirewallRuleCreate(BaseModel):
-    name: str
-    rule_type: FirewallRuleType
-    action: FirewallAction
-    severity: FirewallSeverity = FirewallSeverity.MEDIUM
-    pattern: Optional[str] = None
-    enabled: bool = True
-
-
-class FirewallRuleUpdate(BaseModel):
-    name: Optional[str] = None
-    rule_type: Optional[FirewallRuleType] = None
-    action: Optional[FirewallAction] = None
-    severity: Optional[FirewallSeverity] = None
-    pattern: Optional[str] = None
-    enabled: Optional[bool] = None
-
-
-class FirewallRuleResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    project_id: int
-    name: str
-    rule_type: FirewallRuleType
-    action: FirewallAction
-    severity: FirewallSeverity
-    pattern: Optional[str]
-    enabled: bool
 
 @router.get("/{project_id}/firewall/rules", response_model=List[FirewallRuleResponse])
 def list_rules(
