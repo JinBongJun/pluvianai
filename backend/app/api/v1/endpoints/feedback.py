@@ -27,23 +27,15 @@ from fastapi import (
     UploadFile,
     status,
 )
-from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.logging_config import logger
 from app.core.security import get_current_user
 from app.models.user import User
+from app.schemas.feedback import FeedbackPayload
 
 
 router = APIRouter()
-
-
-class FeedbackPayload(BaseModel):
-    message: str = Field(..., min_length=5, max_length=5000)
-    page: Optional[str] = Field(
-        default=None,
-        description="Optional path or context where the feedback was sent from.",
-    )
 
 
 def _feedback_body(

@@ -2,12 +2,10 @@
 Activity log endpoints
 """
 
-from typing import List, Optional
-from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
-from pydantic import BaseModel, ConfigDict
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.decorators import handle_errors
@@ -19,23 +17,9 @@ from app.models.audit_log import AuditLog
 from app.models.api_call import APICall
 from app.models.project import Project
 from app.models.alert import Alert
+from app.schemas.activity import ActivityItem
 
 router = APIRouter()
-
-
-class ActivityItem(BaseModel):
-    """Activity log item"""
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    user_id: Optional[int]
-    action: str
-    resource_type: Optional[str]
-    resource_id: Optional[int]
-    old_value: Optional[dict]
-    new_value: Optional[dict]
-    ip_address: Optional[str]
-    created_at: datetime
 
 @router.get("")
 @handle_errors

@@ -1,19 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any, Optional
 from app.core.database import get_db
 from app.models.project import Project
 from app.models.user import User
 from app.core.dependencies import get_current_user
-from pydantic import BaseModel
+from app.schemas.self_hosted import SentinelReport
 
 router = APIRouter()
-
-class SentinelReport(BaseModel):
-    trace_id: str
-    nodes: List[Dict[str, Any]]
-    edges: List[Dict[str, Any]]
-    timestamp: str
 
 @router.post("/projects/{project_id}/sentinel/report")
 async def report_sentinel_data(

@@ -2,7 +2,6 @@ from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
@@ -12,22 +11,10 @@ from app.core.permissions import require_admin
 from app.models.user import User
 from app.models.usage import Usage
 from app.models.project import Project
+from app.schemas.internal_usage import ProjectUsageItem, ProjectUsageResponse
 
 
 router = APIRouter(prefix="/usage", tags=["internal-usage"])
-
-
-class ProjectUsageItem(BaseModel):
-    project_id: int | None
-    project_name: str | None
-    owner_email: str | None
-    total_attempts: int
-    runs: int
-
-
-class ProjectUsageResponse(BaseModel):
-    month: str
-    items: List[ProjectUsageItem]
 
 
 def _parse_month(month: str) -> tuple[datetime, datetime]:

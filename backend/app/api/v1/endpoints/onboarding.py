@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -7,13 +6,10 @@ from app.core.dependencies import get_onboarding_service
 from app.core.security import get_current_user
 from app.models.project import Project
 from app.models.user import User
+from app.schemas.onboarding import SimulateTrafficRequest
 from app.services.onboarding_service import OnboardingService
 
 router = APIRouter()
-
-
-class SimulateTrafficRequest(BaseModel):
-    project_id: int
 
 
 def _ensure_owned_project(db: Session, user_id: int, project_id: int) -> Project:

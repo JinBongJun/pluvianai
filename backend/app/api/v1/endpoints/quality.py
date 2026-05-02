@@ -1,7 +1,6 @@
 import json
-from typing import List, Optional, Dict, Any
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -11,14 +10,9 @@ from app.models.user import User
 from app.services.quality_evaluator import QualityEvaluator
 from app.models.api_call import APICall
 from app.models.quality_score import QualityScore
+from app.schemas.quality import EvaluationRequest
 
 router = APIRouter()
-
-class EvaluationRequest(BaseModel):
-    api_call_id: int
-    expected_schema: Optional[Dict[str, Any]] = None
-    required_fields: Optional[List[str]] = None
-    use_advanced: bool = False
 
 @router.post("/{project_id}/quality/evaluate")
 def evaluate_quality(

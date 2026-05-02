@@ -1,8 +1,6 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
-from datetime import datetime
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -10,23 +8,11 @@ from app.core.permissions import check_project_access, check_project_write_acces
 from app.models.user import User
 from app.core.dependencies import get_alert_service
 from app.models.alert import Alert
+from app.schemas.alerts import AlertResponse
 
 router = APIRouter()
 
 # Path prefix when mounted: /projects (so full path e.g. /api/v1/projects/{project_id}/alerts)
-
-class AlertResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    project_id: int
-    alert_type: str
-    severity: str
-    title: str
-    message: str  # API contract; Alert model exposes via message property from description
-    is_resolved: bool
-    resolved_at: Optional[datetime] = None
-    created_at: datetime
 
 @router.get("/{project_id}/alerts/stats")
 def get_alert_stats(
