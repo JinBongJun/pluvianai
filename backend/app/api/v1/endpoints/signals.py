@@ -4,68 +4,24 @@ Signal Detection API endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from typing import List
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.permissions import check_project_access, check_project_write_access, ProjectRole
 from app.models.user import User
 from app.models.project import Project
+from app.schemas.signals import (
+    AgentSignalConfigPayload,
+    SignalConfigCreate,
+    SignalConfigResponse,
+    SignalConfigUpdate,
+    SignalDetectionRequest,
+    SignalDetectionResponse,
+)
 from app.services.signal_detection_service import SignalDetectionService
 
 router = APIRouter()
-
-
-# Request/Response Models
-
-class SignalConfigCreate(BaseModel):
-    signal_type: str = Field(..., description="Signal type (length_change, latency_limit, etc.)")
-    name: str = Field(..., description="Configuration name")
-    params: Optional[dict] = None
-    severity: Optional[str] = Field(None, description="low/medium/high/critical")
-    enabled: bool = True
-
-
-class SignalConfigUpdate(BaseModel):
-    name: Optional[str] = None
-    params: Optional[dict] = None
-    severity: Optional[str] = Field(None, description="low/medium/high/critical")
-    enabled: Optional[bool] = None
-
-
-class SignalConfigResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    project_id: int
-    signal_type: str
-    name: str
-    params: Optional[dict]
-    severity: Optional[str]
-    enabled: bool
-    created_at: Optional[str] = None
-
-class SignalDetectionRequest(BaseModel):
-    response_text: str = Field(..., description="Response text to analyze")
-    request_data: Optional[dict] = None
-    response_data: Optional[dict] = None
-    baseline_data: Optional[dict] = None
-
-
-class SignalDetectionResponse(BaseModel):
-    status: str
-    signals: List[dict]
-    signal_count: int
-    critical_count: int
-    high_count: int
-
-
-class AgentSignalConfigPayload(BaseModel):
-    signal_type: str
-    params: Optional[dict] = None
-    severity: Optional[str] = Field(None, description="low/medium/high/critical")
-    enabled: Optional[bool] = True
 
 
 # Endpoints
