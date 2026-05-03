@@ -9,7 +9,6 @@ import uuid
 import json
 import asyncio
 import threading
-from pydantic import BaseModel, Field
 from sqlalchemy.types import JSON
 from app.core.logging_config import logger
 from app.core.metrics import (
@@ -40,6 +39,13 @@ from app.models.agent_eval_config_history import AgentEvalConfigHistory
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.user_api_key import UserApiKey
+from app.schemas.live_view import (
+    AgentHardDeleteRequest,
+    DeleteSavedLogsRequest,
+    SaveLogsRequest,
+    SnapshotBatchActionRequest,
+    SnapshotBatchDeleteRequest,
+)
 from app.services.cache_service import cache_service
 from app.services.live_view_events import publish_agents_changed
 from app.domain.live_view_release_gate import (
@@ -533,50 +539,6 @@ def _batch_snapshot_source_ids_with_tool_result_trajectory(
     )
     return {str(r[0]) for r in rows if r[0] is not None}
 
-
-class SaveLogsRequest(BaseModel):
-    snapshot_ids: List[int] = Field(
-        ...,
-        min_length=1,
-        max_length=500,
-        description="Snapshot IDs to save for the selected node.",
-    )
-
-
-class DeleteSavedLogsRequest(BaseModel):
-    snapshot_ids: List[int] = Field(
-        ...,
-        min_length=1,
-        max_length=500,
-        description="Snapshot IDs to remove from saved logs for the selected node.",
-    )
-
-
-class SnapshotBatchDeleteRequest(BaseModel):
-    snapshot_ids: List[int] = Field(
-        ...,
-        min_length=1,
-        max_length=1000,
-        description="Snapshot IDs to soft-delete.",
-    )
-
-
-class SnapshotBatchActionRequest(BaseModel):
-    snapshot_ids: List[int] = Field(
-        ...,
-        min_length=1,
-        max_length=1000,
-        description="Snapshot IDs for batch action.",
-    )
-
-
-class AgentHardDeleteRequest(BaseModel):
-    agent_ids: List[str] = Field(
-        ...,
-        min_length=1,
-        max_length=500,
-        description="Agent IDs (system_prompt_hash) to hard-delete for this project.",
-    )
 
 @router.get("/projects/{project_id}/live-view/agents")
 def list_agents(
