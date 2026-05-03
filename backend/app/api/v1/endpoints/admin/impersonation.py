@@ -4,7 +4,6 @@ Admin impersonation endpoints
 
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -15,15 +14,10 @@ from app.core.responses import success_response
 from app.core.logging_config import logger
 from app.core.dependencies import get_audit_service
 from app.models.user import User
+from app.schemas.admin import ImpersonationRequest
 from app.services.impersonation_service import ImpersonationService
 
 router = APIRouter()
-
-
-class ImpersonationRequest(BaseModel):
-    """Impersonation request schema"""
-    reason: Optional[str] = None
-    duration_minutes: int = 60
 
 
 def _get_client_ip(request: Request) -> Optional[str]:
