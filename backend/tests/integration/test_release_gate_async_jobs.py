@@ -37,6 +37,9 @@ class TestReleaseGateAsyncJobs:
         body = response.json()
         assert body["job"]["id"] == str(existing.id)
         assert body["job"]["status"] == "queued"
+        assert body["job"]["repeat_runs"] == 3
+        assert body["job"]["snapshot_count"] is None
+        assert body["job"]["attempts_total"] is None
 
         jobs = (
             db.query(ReleaseGateJob)
@@ -117,6 +120,10 @@ class TestReleaseGateAsyncJobs:
         )
 
         assert response.status_code == status.HTTP_202_ACCEPTED
+        body = response.json()
+        assert body["job"]["repeat_runs"] == 3
+        assert body["job"]["snapshot_count"] == 1
+        assert body["job"]["attempts_total"] == 3
 
     async def test_get_active_job_returns_running_job_for_agent(
         self, async_client, auth_headers, db, test_project, test_user
@@ -153,6 +160,8 @@ class TestReleaseGateAsyncJobs:
         body = response.json()
         assert body["job"]["id"] == str(newer.id)
         assert body["job"]["status"] == "running"
+        assert body["job"]["owner_agent_id"] == "agent-B"
+        assert body["job"]["repeat_runs"] == 3
 
     async def test_get_active_job_filters_by_agent_id(
         self, async_client, auth_headers, db, test_project, test_user
@@ -189,6 +198,8 @@ class TestReleaseGateAsyncJobs:
         body = response.json()
         assert body["job"]["id"] == str(job_a.id)
         assert body["job"]["status"] == "queued"
+        assert body["job"]["owner_agent_id"] == "agent-A"
+        assert body["job"]["repeat_runs"] == 2
 
     async def test_get_job_returns_perf_summary_for_terminal_job(
         self, async_client, auth_headers, db, test_project, test_user
