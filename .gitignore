@@ -8,6 +8,8 @@ env/
 venv/
 ENV/
 .venv
+.venv*/
+.python*/
 pip-log.txt
 pip-delete-this-directory.txt
 .pytest_cache/
