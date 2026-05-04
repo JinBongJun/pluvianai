@@ -250,7 +250,7 @@ class TestProjectsAPI:
 
         assert response.status_code == status.HTTP_409_CONFLICT
         payload = response.json()
-        detail = payload["detail"]
+        detail = payload.get("detail") or payload.get("error", {}).get("details")
         assert detail["code"] == "PROJECT_ORG_SCOPE_MISMATCH"
         assert detail["details"]["project_id"] == test_project.id
         assert detail["details"]["expected_organization_id"] == org_b.id
