@@ -3,7 +3,10 @@
 import { useMemo } from "react";
 
 import type { ReleaseGateLayoutGateBodyProps } from "./ReleaseGateLayoutGateBody";
-import type { ReleaseGateValidateRunContextValue } from "./ReleaseGateValidateRunContext";
+import type {
+  ReleaseGateActiveJobScale,
+  ReleaseGateValidateRunContextValue,
+} from "./ReleaseGateValidateRunContext";
 import type { AgentForPicker } from "@/components/release-gate/AgentPickerCard";
 import type { OrganizationProject, Project } from "@/lib/api";
 
@@ -15,6 +18,7 @@ export type UseReleaseGatePageModelReturnParams = {
   isValidating: boolean;
   runLocked: boolean;
   activeJobId: string | null;
+  activeJobScale: ReleaseGateActiveJobScale | null;
   cancelRequested: boolean;
   cancelLocked: boolean;
   handleValidate: () => void;
@@ -51,6 +55,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     isValidating,
     runLocked,
     activeJobId,
+    activeJobScale,
     cancelRequested,
     cancelLocked,
     handleValidate,
@@ -82,6 +87,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
       isValidating,
       runLocked,
       activeJobId,
+      activeJobScale,
       cancelRequested,
       cancelLocked,
       handleValidate,
@@ -95,6 +101,7 @@ export function useReleaseGatePageModelReturn(p: UseReleaseGatePageModelReturnPa
     }),
     [
       activeJobId,
+      activeJobScale,
       cancelLocked,
       cancelRequested,
       completedResults,

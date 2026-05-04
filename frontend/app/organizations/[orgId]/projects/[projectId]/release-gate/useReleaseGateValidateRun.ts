@@ -26,6 +26,7 @@ import {
 } from "./releaseGateValidateAsyncPayload";
 import { getProjectAccessErrorCopy, isProjectPermissionError } from "@/lib/projectAccess";
 import { useToast } from "@/components/ToastContainer";
+import type { ReleaseGateActiveJobScale } from "./ReleaseGateValidateRunContext";
 import {
   buildReleaseGateReportHydrationTargets,
   mapExportedReportToCompletedReleaseGateEntry,
@@ -52,6 +53,12 @@ const RESULTS_REHYDRATE_LIMIT = 5;
 const TERMINAL_JOB_STATUSES = new Set(["succeeded", "failed", "canceled"]);
 const ACTIVE_JOB_STATUSES = new Set(["queued", "running"]);
 
+type ReleaseGateJobScaleSource = {
+  repeat_runs?: unknown;
+  snapshot_count?: unknown;
+  attempts_total?: unknown;
+};
+
 function releaseGateRunSessionKey(projectId: number, agentId: string): string {
   return `release-gate:active-job:${projectId}:${agentId}`;
 }
@@ -64,10 +71,37 @@ type ReleaseGateJobUpdateEvent = {
   job?: {
     id?: string;
     status?: string | null;
+    owner_agent_id?: string | null;
+    repeat_runs?: number | null;
+    snapshot_count?: number | null;
+    attempts_total?: number | null;
     started_at?: string | null;
     cancel_requested_at?: string | null;
   };
 };
+
+function positiveNumberOrNull(value: unknown): number | null {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+}
+
+function nonNegativeNumberOrNull(value: unknown): number | null {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+}
+
+function mapReleaseGateJobScale(
+  job: ReleaseGateJobScaleSource | null | undefined
+): ReleaseGateActiveJobScale | null {
+  const scale: ReleaseGateActiveJobScale = {
+    repeatRuns: positiveNumberOrNull(job?.repeat_runs),
+    snapshotCount: nonNegativeNumberOrNull(job?.snapshot_count),
+    attemptsTotal: nonNegativeNumberOrNull(job?.attempts_total),
+  };
+  return scale.repeatRuns != null || scale.snapshotCount != null || scale.attemptsTotal != null
+    ? scale
+    : null;
+}
 
 function parseReleaseGateJobUpdateEvent(raw: string): ReleaseGateJobUpdateEvent | null {
   try {
@@ -128,6 +162,7 @@ export function useReleaseGateValidateRun(options: {
   const [isValidating, setIsValidating] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [activeJobOwnerAgentId, setActiveJobOwnerAgentId] = useState<string | null>(null);
+  const [activeJobScale, setActiveJobScale] = useState<ReleaseGateActiveJobScale | null>(null);
   const [cancelRequested, setCancelRequested] = useState(false);
   const [cancelLocked, setCancelLocked] = useState(false);
   const [completedResultsByAgentId, setCompletedResultsByAgentId] = useState<
@@ -220,6 +255,10 @@ export function useReleaseGateValidateRun(options: {
     const attach = (job: {
       id?: string;
       status?: string | null;
+      owner_agent_id?: string | null;
+      repeat_runs?: number | null;
+      snapshot_count?: number | null;
+      attempts_total?: number | null;
       started_at?: string | null;
       cancel_requested_at?: string | null;
     }) => {
@@ -229,7 +268,8 @@ export function useReleaseGateValidateRun(options: {
       setError("");
       setIsValidating(true);
       setActiveJobId(id);
-      setActiveJobOwnerAgentId(normalizedAgentId);
+      setActiveJobOwnerAgentId(String(job?.owner_agent_id || "").trim() || normalizedAgentId);
+      setActiveJobScale(mapReleaseGateJobScale(job));
       setCancelLocked(Boolean(job?.started_at));
       const cancelReq = Boolean(job?.cancel_requested_at);
       cancelRequestedRef.current = cancelReq;
@@ -421,6 +461,7 @@ export function useReleaseGateValidateRun(options: {
           const payload = parseReleaseGateJobUpdateEvent(event.data);
           const job = payload?.job;
           if (!job || String(job.id || "").trim() !== activeJobId) return;
+          setActiveJobScale(mapReleaseGateJobScale(job));
           if (job.started_at) {
             setCancelLocked(true);
           }
@@ -491,6 +532,7 @@ export function useReleaseGateValidateRun(options: {
       setActiveJobId(null);
       activeJobOwnerAgentIdRef.current = null;
       setActiveJobOwnerAgentId(null);
+      setActiveJobScale(null);
       setIsValidating(false);
       setCancelRequested(false);
       setCancelLocked(false);
@@ -544,6 +586,7 @@ export function useReleaseGateValidateRun(options: {
         try {
           if (terminalStatusHint) {
             const finalRes = await releaseGateAPI.getJob(projectId, activeJobId, 1);
+            setActiveJobScale(mapReleaseGateJobScale(finalRes?.job));
             if (finalRes?.job?.started_at) {
               setCancelLocked(true);
             }
@@ -556,6 +599,7 @@ export function useReleaseGateValidateRun(options: {
             terminalStatusHint = null;
           }
           const res = await releaseGateAPI.getJob(projectId, activeJobId, 0);
+          setActiveJobScale(mapReleaseGateJobScale(res?.job));
           if (res?.job?.started_at) {
             setCancelLocked(true);
           }
@@ -566,6 +610,7 @@ export function useReleaseGateValidateRun(options: {
           const status = String(res?.job?.status || "").toLowerCase();
           if (status === "succeeded" || status === "failed" || status === "canceled") {
             const finalRes = await releaseGateAPI.getJob(projectId, activeJobId, 1);
+            setActiveJobScale(mapReleaseGateJobScale(finalRes?.job));
             if (finalRes?.job?.started_at) {
               setCancelLocked(true);
             }
@@ -628,6 +673,7 @@ export function useReleaseGateValidateRun(options: {
             setActiveJobId(null);
             activeJobOwnerAgentIdRef.current = null;
             setActiveJobOwnerAgentId(null);
+            setActiveJobScale(null);
             setIsValidating(false);
             return;
           }
@@ -636,6 +682,7 @@ export function useReleaseGateValidateRun(options: {
             setActiveJobId(null);
             activeJobOwnerAgentIdRef.current = null;
             setActiveJobOwnerAgentId(null);
+            setActiveJobScale(null);
             setIsValidating(false);
             return;
           }
@@ -644,6 +691,7 @@ export function useReleaseGateValidateRun(options: {
             setActiveJobId(null);
             activeJobOwnerAgentIdRef.current = null;
             setActiveJobOwnerAgentId(null);
+            setActiveJobScale(null);
             setIsValidating(false);
             setCancelRequested(false);
             return;
@@ -703,6 +751,7 @@ export function useReleaseGateValidateRun(options: {
     setIsValidating(true);
     setCancelRequested(false);
     setCancelLocked(false);
+    setActiveJobScale(null);
     cancelRequestedRef.current = false;
     setPlanError(null);
     setError("");
@@ -720,6 +769,15 @@ export function useReleaseGateValidateRun(options: {
         throw new Error("Failed to start Release Gate job.");
       }
       setActiveJobId(jobId);
+      setActiveJobScale(mapReleaseGateJobScale(jobRes?.job));
+      const returnedOwnerAgentId = String(jobRes?.job?.owner_agent_id || "").trim();
+      if (returnedOwnerAgentId && returnedOwnerAgentId !== ownerAgentId) {
+        activeJobOwnerAgentIdRef.current = returnedOwnerAgentId;
+        setActiveJobOwnerAgentId(returnedOwnerAgentId);
+        setError(
+          "Another Release Gate run is already active for a different node. Wait for it to finish, then run this node."
+        );
+      }
       setCancelLocked(Boolean(jobRes?.job?.started_at));
       startedAsyncJob = true;
       if (cancelRequestedRef.current) {
@@ -785,7 +843,7 @@ export function useReleaseGateValidateRun(options: {
         errorCode === "dataset_snapshot_agent_mismatch"
       ) {
         setError(
-          "Run blocked: selected data includes logs from another agent. Use only Live Logs or Saved Data for this agent."
+          "Run blocked: selected data includes cases from another agent. Use only Issues or Saved data for this agent."
         );
       } else if (errorCode === "release_gate_requires_pinned_model") {
         setError(
@@ -813,6 +871,7 @@ export function useReleaseGateValidateRun(options: {
         setIsValidating(false);
         activeJobOwnerAgentIdRef.current = null;
         setActiveJobOwnerAgentId(null);
+        setActiveJobScale(null);
       }
     }
   }, [projectId, isValidating, activeJobId, depsRef, runValidateCooldownUntilMs]);
@@ -821,6 +880,7 @@ export function useReleaseGateValidateRun(options: {
     Boolean(normalizedAgentId) && activeJobOwnerAgentId === normalizedAgentId ? isValidating : false;
   const visibleActiveJobId =
     Boolean(normalizedAgentId) && activeJobOwnerAgentId === normalizedAgentId ? activeJobId : null;
+  const visibleActiveJobScale = activeJobId ? activeJobScale : null;
   const visibleCancelLocked =
     Boolean(normalizedAgentId) && activeJobOwnerAgentId === normalizedAgentId ? cancelLocked : false;
   const visibleCancelRequested =
@@ -841,6 +901,7 @@ export function useReleaseGateValidateRun(options: {
   return {
     isValidating: visibleIsValidating,
     activeJobId: visibleActiveJobId,
+    activeJobScale: visibleActiveJobScale,
     cancelLocked: visibleCancelLocked,
     cancelRequested: visibleCancelRequested,
     result: latestResult,

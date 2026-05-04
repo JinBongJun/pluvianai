@@ -5,6 +5,7 @@ import { normalizeEvalConfigKey } from "@/lib/evalPresentation";
 
 import { EVAL_CHECK_LABELS, getEvalCheckParams } from "./releaseGateExpandedHelpers";
 import { sanitizePayloadForPreview } from "./releaseGatePageContent.lib";
+import type { ReleaseGateActiveJobScale } from "./ReleaseGateValidateRunContext";
 
 export type ExpandedMapActiveCheckCard = {
   id: string;
@@ -149,6 +150,7 @@ export type BuildReleaseGateMapRgDetailsInput = {
   handleValidate: () => void;
   runLocked: boolean;
   activeJobId: string | null;
+  activeJobScale: ReleaseGateActiveJobScale | null;
   handleCancelActiveJob: (() => void) | undefined;
   handleRepeatSelect: (runs: number) => void;
   openSettings: () => void;
@@ -193,6 +195,7 @@ export type ReleaseGateMapRgDetails = {
     runLocked: boolean;
     handleValidate: () => void;
     activeJobId: string | null;
+    activeJobScale: ReleaseGateActiveJobScale | null;
     cancelRequested: boolean;
     cancelLocked: boolean;
     handleCancel: (() => void) | undefined;
@@ -288,6 +291,7 @@ export function buildReleaseGateMapRgDetails(
       runLocked: p.runLocked,
       handleValidate: p.handleValidate,
       activeJobId: p.activeJobId,
+      activeJobScale: p.activeJobScale,
       cancelRequested: p.cancelRequested,
       cancelLocked: p.cancelLocked,
       handleCancel: p.handleCancelActiveJob,

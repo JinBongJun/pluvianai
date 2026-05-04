@@ -118,6 +118,8 @@ export function ReleaseGateMapContent({
   projectId,
   projectName,
   selectedNodeId = null,
+  selectionLocked = false,
+  selectionLockedReason = "Finish or cancel the active Release Gate run before changing nodes.",
 }: {
   agents: any[];
   agentsLoaded?: boolean;
@@ -125,6 +127,8 @@ export function ReleaseGateMapContent({
   projectId: number;
   projectName?: string;
   selectedNodeId?: string | null;
+  selectionLocked?: boolean;
+  selectionLockedReason?: string;
 }) {
   const { fitView, setCenter } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -299,6 +303,15 @@ export function ReleaseGateMapContent({
         canRedo={canRedo}
       />
 
+      {selectionLocked ? (
+        <div
+          className="pointer-events-none absolute left-1/2 top-24 z-50 -translate-x-1/2 rounded-full border border-amber-400/25 bg-amber-400/[0.08] px-4 py-2 text-xs font-semibold text-amber-100 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl"
+          title={selectionLockedReason}
+        >
+          Node selection locked while Release Gate is running.
+        </div>
+      ) : null}
+
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -323,14 +336,15 @@ export function ReleaseGateMapContent({
           }
           if (didActuallyDragRef.current) return;
           if (Date.now() - lastDragStopAtRef.current < DRAG_CLICK_SUPPRESS_MS) return;
+          if (selectionLocked) return;
           onSelectAgent(node.id);
         }}
         connectionMode={ConnectionMode.Loose}
         fitView
         fitViewOptions={{ padding: 0.2 }}
-        nodesDraggable={!selectedNodeId}
+        nodesDraggable={!selectedNodeId && !selectionLocked}
         nodesConnectable={false}
-        elementsSelectable={true}
+        elementsSelectable={!selectionLocked}
         panOnDrag={!selectedNodeId}
         zoomOnScroll={!selectedNodeId}
         zoomOnDoubleClick={false}
@@ -353,6 +367,8 @@ export function ReleaseGateMap({
   projectId,
   projectName,
   selectedNodeId = null,
+  selectionLocked = false,
+  selectionLockedReason,
 }: {
   agents: any[];
   agentsLoaded?: boolean;
@@ -360,6 +376,8 @@ export function ReleaseGateMap({
   projectId: number;
   projectName?: string;
   selectedNodeId?: string | null;
+  selectionLocked?: boolean;
+  selectionLockedReason?: string;
 }) {
   return (
     <ReactFlowProvider>
@@ -370,6 +388,8 @@ export function ReleaseGateMap({
         projectId={projectId}
         projectName={projectName}
         selectedNodeId={selectedNodeId}
+        selectionLocked={selectionLocked}
+        selectionLockedReason={selectionLockedReason}
       />
     </ReactFlowProvider>
   );

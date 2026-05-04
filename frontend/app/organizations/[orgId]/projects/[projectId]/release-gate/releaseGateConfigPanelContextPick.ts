@@ -93,7 +93,7 @@ export function pickReleaseGateConfigPanelContext(
     selectedBaselineCount: ctx.selectedBaselineCount,
     selectedDataSummary:
       ctx.selectedDataSummary ??
-      'No baseline data yet. Select representative "good" snapshots from Live Logs or Saved Data.',
+      'No baseline data yet. Select representative "good" cases from Issues or Saved.',
     runLocked: vctx.runLocked,
     repeatRuns: ctx.repeatRuns,
     toolContextMode: ctx.toolContextMode,

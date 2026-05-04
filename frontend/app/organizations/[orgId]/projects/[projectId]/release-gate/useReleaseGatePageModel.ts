@@ -186,6 +186,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
     isValidating,
     runLocked,
     activeJobId,
+    activeJobScale,
     cancelRequested,
     cancelLocked,
     result,
@@ -397,7 +398,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       ? `${runSnapshotIds.length} live log${runSnapshotIds.length === 1 ? "" : "s"} selected`
       : runDatasetIds.length > 0
         ? `${selectedDatasetSnapshotCount} snapshot${selectedDatasetSnapshotCount === 1 ? "" : "s"} from ${runDatasetIds.length} saved dataset${runDatasetIds.length === 1 ? "" : "s"}`
-        : "Choose baseline data from Live Logs or Saved Data.";
+        : "Choose baseline data from Issues or Saved.";
 
   useReleaseGateSelectedSnapshotsSideEffects({
     selectedSnapshotIdsForRun,
@@ -898,6 +899,7 @@ export function useReleaseGatePageModel(): ReleaseGatePageModel {
       isValidating,
       runLocked,
       activeJobId,
+      activeJobScale,
       cancelRequested,
       cancelLocked,
       handleValidate,

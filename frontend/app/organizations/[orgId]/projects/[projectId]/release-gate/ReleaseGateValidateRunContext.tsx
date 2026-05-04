@@ -4,11 +4,18 @@ import { createContext } from "react";
 import type { ReleaseGateResult } from "@/lib/api";
 import type { CompletedReleaseGateResultEntry } from "./useReleaseGateValidateRun";
 
+export type ReleaseGateActiveJobScale = {
+  repeatRuns?: number | null;
+  snapshotCount?: number | null;
+  attemptsTotal?: number | null;
+};
+
 /** Validate / async job UI — split from main page context so frequent form edits do not refresh this slice. */
 export type ReleaseGateValidateRunContextValue = {
   isValidating: boolean;
   runLocked: boolean;
   activeJobId: string | null;
+  activeJobScale: ReleaseGateActiveJobScale | null;
   cancelRequested: boolean;
   cancelLocked: boolean;
   handleValidate: () => void;

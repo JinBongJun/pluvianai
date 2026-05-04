@@ -631,7 +631,7 @@ export const ClinicalLogDataSection: React.FC<ClinicalLogDataSectionProps> = ({
           <div className="p-10 text-center space-y-4 border border-dashed border-white/5 rounded-3xl">
             <FileArchive className="w-8 h-8 text-slate-700 mx-auto" />
             <p className="text-xs font-black text-slate-500 uppercase tracking-wide leading-relaxed">
-              No datasets saved yet. Select logs in Live Logs and save them into datasets.
+              No datasets saved yet. Select cases in Issues and save them into datasets.
             </p>
           </div>
         )}

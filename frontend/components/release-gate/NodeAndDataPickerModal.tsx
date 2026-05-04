@@ -308,7 +308,7 @@ export function NodeAndDataPickerModal({
         {step === "node" && (
           <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-2">
             <p className="text-xs text-slate-500 mb-3">
-              Choose an agent, then pick Live Logs or saved datasets.
+              Choose an agent, then pick Issues or saved datasets.
             </p>
             {agentsLoading ? (
               <div className="flex items-center justify-center py-12">
@@ -349,7 +349,7 @@ export function NodeAndDataPickerModal({
                     className={`w-5 h-5 shrink-0 mt-0.5 ${dataSource === "recent" ? "text-fuchsia-400" : "text-slate-500"}`}
                   />
                   <div>
-                    <div className="text-sm font-semibold text-slate-100">Live Logs</div>
+                    <div className="text-sm font-semibold text-slate-100">Issues</div>
                     <div className="text-xs text-slate-500 mt-0.5">
                       Use recent logs from this agent (no save needed)
                     </div>

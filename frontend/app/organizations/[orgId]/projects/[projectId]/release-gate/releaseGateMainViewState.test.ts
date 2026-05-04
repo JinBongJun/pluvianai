@@ -66,6 +66,7 @@ describe("releaseGateMainViewState", () => {
           runLocked: false,
           handleValidate: () => {},
           activeJobId: null,
+          activeJobScale: null,
           cancelRequested: false,
           cancelLocked: false,
           handleCancel: undefined,

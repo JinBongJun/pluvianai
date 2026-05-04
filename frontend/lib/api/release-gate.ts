@@ -181,6 +181,10 @@ export const releaseGateAPI = {
     job: {
       id: string;
       status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+      owner_agent_id?: string | null;
+      repeat_runs?: number | null;
+      snapshot_count?: number | null;
+      attempts_total?: number | null;
       created_at?: string | null;
       started_at?: string | null;
       finished_at?: string | null;
@@ -205,6 +209,10 @@ export const releaseGateAPI = {
     job: {
       id: string;
       status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+      owner_agent_id?: string | null;
+      repeat_runs?: number | null;
+      snapshot_count?: number | null;
+      attempts_total?: number | null;
       created_at?: string | null;
       started_at?: string | null;
       finished_at?: string | null;
@@ -229,6 +237,10 @@ export const releaseGateAPI = {
     job: {
       id: string;
       status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+      owner_agent_id?: string | null;
+      repeat_runs?: number | null;
+      snapshot_count?: number | null;
+      attempts_total?: number | null;
       created_at?: string | null;
       started_at?: string | null;
       finished_at?: string | null;
@@ -253,6 +265,10 @@ export const releaseGateAPI = {
     job: {
       id: string;
       status: "queued" | "running" | "succeeded" | "failed" | "canceled";
+      owner_agent_id?: string | null;
+      repeat_runs?: number | null;
+      snapshot_count?: number | null;
+      attempts_total?: number | null;
       created_at?: string | null;
       started_at?: string | null;
       finished_at?: string | null;

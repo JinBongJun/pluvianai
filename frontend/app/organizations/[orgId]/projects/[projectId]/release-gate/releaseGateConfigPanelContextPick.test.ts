@@ -12,6 +12,7 @@ function vctxBase(overrides: Partial<ReleaseGateValidateRunContextValue> = {}): 
     isValidating,
     runLocked: overrides.runLocked ?? (isValidating || Boolean(activeJobId)),
     activeJobId,
+    activeJobScale: null,
     cancelRequested: false,
     cancelLocked: false,
     handleValidate: () => {},

@@ -480,7 +480,7 @@ export function ReleaseGateRunOutputSidePanel(props: ReleaseGateRunOutputSidePan
                                 Validation session
                               </div>
                               <div className="mt-1 text-[11px] text-white/45">
-                                {formatDateTime(group.createdAt)}{group.repeatRuns ? ` 쨌 ${group.repeatRuns}x each` : ""}
+                                {formatDateTime(group.createdAt)}{group.repeatRuns ? ` · ${group.repeatRuns}x each` : ""}
                               </div>
                             </div>
                             <button

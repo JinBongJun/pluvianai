@@ -89,7 +89,7 @@ function ReleaseGateLayoutGateBodyInner({
             <p>Release Gate needs baseline snapshots before it can compare a candidate model.</p>
             <ol className="list-decimal list-inside space-y-1 text-slate-300">
               <li>Open Live View and send at least one real or test request.</li>
-              <li>Select baseline snapshots from Live Logs or Saved Data.</li>
+              <li>Select baseline cases from Issues or Saved.</li>
               <li>Return here to configure candidate overrides and run validation.</li>
             </ol>
           </div>

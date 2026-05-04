@@ -69,6 +69,8 @@ export function ReleaseGateExpandedView() {
           projectId={m.projectId}
           projectName={m.projectName}
           selectedNodeId={m.agentId || null}
+          selectionLocked={m.runLocked}
+          selectionLockedReason="Finish or cancel the active Release Gate run before changing nodes."
         />
       </div>
       <div className="absolute inset-0 z-[9999] pointer-events-none overflow-y-auto">

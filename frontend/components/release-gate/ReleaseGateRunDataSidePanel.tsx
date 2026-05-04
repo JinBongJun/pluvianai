@@ -145,6 +145,12 @@ export function ReleaseGateRunDataSidePanel(props: ReleaseGateRunDataSidePanelPr
                   <p className="text-[11px] leading-relaxed text-slate-400">
                     Pick snapshots or saved sets for this experiment.
                   </p>
+                  {runLocked ? (
+                    <p className="mt-2 rounded-lg border border-amber-400/20 bg-amber-400/[0.07] px-3 py-2 text-[10px] font-medium leading-5 text-amber-100/85">
+                      Inputs are locked while Release Gate is running. You can inspect the
+                      selected data, but changes apply only after this run finishes or is canceled.
+                    </p>
+                  ) : null}
                 </div>
                 {dataPanelTab === "logs" && (
                   <div className="flex h-full flex-col" data-testid="rg-data-panel-logs">

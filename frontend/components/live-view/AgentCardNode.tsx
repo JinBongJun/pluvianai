@@ -63,7 +63,7 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
           typeof rgConfig.selectedBaselineCount === "number" &&
           rgConfig.selectedBaselineCount === 0
         ) {
-          return "Select baseline data in Live Logs or Saved Data.";
+          return "Select baseline data in Issues or Saved.";
         }
         if (!rgConfig.canRunValidate) {
           return "Complete required selections to enable Start.";
@@ -86,8 +86,8 @@ export const AgentCardNode = memo(({ id, data, selected, dragging }: NodeProps<A
       : configSourceLabel
         ? `Preview source: ${configSourceLabel}`
         : String(rgConfig.selectedDataSummary || "").trim() ||
-          "Choose baseline data from Live Logs or Saved Data."
-    : "Choose baseline data from Live Logs or Saved Data.";
+          "Choose baseline data from Issues or Saved."
+    : "Choose baseline data from Issues or Saved.";
   const lastRunStatusLabel =
     rgConfig && typeof rgConfig.lastRunStatusLabel === "string"
       ? String(rgConfig.lastRunStatusLabel).trim()

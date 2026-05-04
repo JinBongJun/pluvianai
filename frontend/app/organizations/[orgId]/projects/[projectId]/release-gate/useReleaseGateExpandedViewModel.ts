@@ -118,6 +118,7 @@ export function useReleaseGateExpandedViewModel({
   const isValidating = vctx.isValidating;
   const runLocked = vctx.runLocked;
   const activeJobId = vctx.activeJobId ?? null;
+  const activeJobScale = vctx.activeJobScale;
   const cancelRequested = vctx.cancelRequested;
   const cancelLocked = vctx.cancelLocked;
   const handleValidate = vctx.handleValidate;
@@ -336,6 +337,13 @@ export function useReleaseGateExpandedViewModel({
   );
 
   const handleBack = useCallback(() => {
+    if (runLocked) {
+      toast.showToast(
+        "Release Gate is running. Finish or cancel the run before changing nodes.",
+        "info"
+      );
+      return;
+    }
     setViewMode("map");
     setAgentId("");
     setSelectedAgent(null);
@@ -363,6 +371,8 @@ export function useReleaseGateExpandedViewModel({
     clearHistoryOverlayPending,
     setSelectedRunId,
     setRepeatDropdownOpen,
+    runLocked,
+    toast,
   ]);
 
   const handleRepeatSelect = useCallback((runs: number) => {
@@ -376,6 +386,20 @@ export function useReleaseGateExpandedViewModel({
     setRepeatRuns(runs);
     setRepeatDropdownOpen(false);
   }, [isValidating, activeJobId, setRepeatRuns, setRepeatDropdownOpen]);
+
+  const handleMapSelectAgent = useCallback(
+    (selectedId: string) => {
+      if (runLocked) {
+        toast.showToast(
+          "Release Gate is running. Finish or cancel the run before changing nodes.",
+          "info"
+        );
+        return;
+      }
+      onMapSelectAgent(selectedId);
+    },
+    [onMapSelectAgent, runLocked, toast]
+  );
 
   const restorationBadgesBySnapshotId = useMemo(() => {
     const m = new Map<string, { body: boolean; ctx: boolean; sharedCtx: boolean }>();
@@ -448,6 +472,7 @@ export function useReleaseGateExpandedViewModel({
         handleValidate,
         runLocked,
         activeJobId,
+        activeJobScale,
         handleCancelActiveJob,
         handleRepeatSelect,
         openSettings: () => setSettingsPanelOpen(true),
@@ -492,6 +517,7 @@ export function useReleaseGateExpandedViewModel({
       handleValidate,
       runLocked,
       activeJobId,
+      activeJobScale,
       handleCancelActiveJob,
       handleRepeatSelect,
       setSettingsPanelOpen,
@@ -538,7 +564,7 @@ export function useReleaseGateExpandedViewModel({
     mutateHistory,
     mutateRecentSnapshots,
     nodeHistoryItems,
-    onMapSelectAgent,
+    onMapSelectAgent: handleMapSelectAgent,
     openBaselineDetailSnapshot,
     orgId,
     projectId,

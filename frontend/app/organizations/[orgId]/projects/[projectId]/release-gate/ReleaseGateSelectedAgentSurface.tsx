@@ -139,6 +139,19 @@ export function ReleaseGateSelectedAgentSurface({
     : rgConfig.isValidating
       ? "Run in progress"
       : "Run blocked";
+  const activeJobScale = rgConfig.activeJobScale;
+  const activeJobScaleParts = [
+    activeJobScale?.repeatRuns != null
+      ? `${activeJobScale.repeatRuns} run${activeJobScale.repeatRuns === 1 ? "" : "s"}`
+      : null,
+    activeJobScale?.snapshotCount != null
+      ? `${activeJobScale.snapshotCount} snapshot${activeJobScale.snapshotCount === 1 ? "" : "s"}`
+      : null,
+    activeJobScale?.attemptsTotal != null
+      ? `${activeJobScale.attemptsTotal} attempt${activeJobScale.attemptsTotal === 1 ? "" : "s"}`
+      : null,
+  ].filter(Boolean);
+  const activeJobScaleText = activeJobScaleParts.join(" · ");
 
   const handleStartClick = () => {
     const isDisabled = !rgConfig.canRunValidate || runLocked || selectedBaselineCount === 0;
@@ -235,6 +248,17 @@ export function ReleaseGateSelectedAgentSurface({
                     <span className="px-2 text-current/40">·</span>
                     <span>{runError || startBlockedReason}</span>
                   </div>
+                  {!runError && runLocked && activeJobScaleText ? (
+                    <div className="mt-1 text-[10px] leading-5 text-current/70">
+                      Current job: {activeJobScaleText}
+                    </div>
+                  ) : null}
+                  {!runError && runLocked ? (
+                    <div className="mt-1 text-[10px] leading-5 text-current/70">
+                      Node selection, inputs, settings, and repeats are locked until this run
+                      finishes or is canceled.
+                    </div>
+                  ) : null}
                   {!runError && rgConfig.keyIssueBlocked ? (
                     <div className="mt-1 text-[10px] leading-5 text-current/70">
                       Open Live View, select the node, then add the key in Settings {">"} API Keys.
@@ -373,6 +397,11 @@ export function ReleaseGateSelectedAgentSurface({
                   rgConfig.setRepeatDropdownOpen(!rgConfig.repeatDropdownOpen);
                 }}
                 disabled={runLocked}
+                title={
+                  runLocked
+                    ? "Repeat count is locked while Release Gate is running."
+                    : "Change repeat count"
+                }
                 data-testid="rg-repeat-trigger"
                 className={clsx(
                   "inline-flex min-h-[56px] items-center gap-2 rounded-xl border px-4 py-3 text-sm font-black uppercase transition",

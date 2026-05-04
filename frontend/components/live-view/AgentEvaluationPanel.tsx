@@ -466,7 +466,7 @@ export function AgentEvaluationPanel({
                 <h2 className="text-lg font-black text-white uppercase tracking-widest">Evaluation</h2>
               </div>
               <p className="text-xs text-slate-400 font-medium">
-                Configure evaluation rules. Log range is managed in Live Logs.
+                Configure evaluation rules. Case range is managed in Issues.
               </p>
             </div>
 
