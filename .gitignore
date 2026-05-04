@@ -69,6 +69,7 @@ frontend/tsc_output.txt
 # Local tool/runtime files
 anthropic.json
 load-tests/k6/bin/
+docs/contents/linkedin-candidates-*.md
 
 # Third-party / reference template pack (do not re-add)
 vive-md-main/
