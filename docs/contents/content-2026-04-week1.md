@@ -1,79 +1,194 @@
-# 2026.04 Week 1 — Ops looks fine, but deploy replay showed long-tail risk
-
-## 목표(포지셔닝 고정)
-- 메인 메시지: **운영(Live)에서 보는 신호만으로는 “배포해도 된다”를 증명하기 어렵다. 저장된 실제 케이스를 배포 게이트에서 같은 입력으로 반복 실행하면 롱테일/불안정이 케이스 단위로 드러난다.**
-- 핵심 증거: **스냅샷이 쌓인 Live 한 장 + Gate 결과(HEALTHY n/10, FLAKY/FLAGGED, 대표 FAIL 이유 1~2개)**
-- 질문: 여러분은 배포 전에 **어떤 최소 증거**(케이스 세트, 반복 횟수, 실패 이유)를 요구하나요?
-
-## 가정(시나리오) — 이번 주 증거에 맞춤
-- **Live View:** 실트래픽 스냅샷이 들어오고, 운영용 eval(예: 짧은 답/지연/HTTP 등)으로 대부분은 “괜찮아 보이는” 그림이 나올 수 있음.
-- **Release Gate:** Live에서 쓰던 것과 **목적이 같은 eval만**이 아니라, 배포 기준(예: **Required keywords**, 강화된 short/length 등)을 **게이트에서** 켜고 같은 저장 케이스를 **repeat(예: 10회)** 로 돌림.
-- **결과:** 일부 intent에서만 **FLAKY** 또는 **FLAGGED**가 나오고, 전체 aggregate만 보면 놓치기 쉬운 패턴이 **케이스 단위**로 보임.
-
-### (선택) “변경 때문에 깨졌다”를 말하고 싶을 때
-- **같은 Gate eval + 같은 저장 케이스 + 같은 repeat** 으로 **baseline(기존 프롬프트/모델)** vs **candidate(후보 프롬프트/모델)** 를 각각 돌린 스크린샷이 있으면, 주장을 **회귀(regression)** 로 올릴 수 있음.
-- 그 스크린 한 쌍이 없으면, 본문에서는 **“새 배포 기준을 올렸더니 숨어 있던 리스크가 드러났다”** 로 정직하게 쓴다.
-
-## 증거에 채울 숫자(복붙용 체크리스트)
-- Snapshots: `____ / 10000` (또는 표시되는 한도)
-- Gate: 선택 로그 **4**개(예: refund/billing 계열 3 + 대조 1), repeat **`10`**
-- 결과 요약: 예) `FLAGGED (71.1%)`, 로그별 `9/10`, `4/10`, `0/10` 등 **실제 UI 숫자**
-- FAIL 이유 라벨(실제 표시에 맞춰 1~2개): 예) `required keywords`, `empty/short`, `latency`
-
-## 스크린샷 구성(Shot 우선)
-- Reddit: `Shot 1(Live 훅)` + `Shot 3 또는 Gate 결과(평가/집계)` 최소
-- IH: `Shot 2b(스냅샷/재료)` + `Shot 6(실패·FLAKY가 읽히는 결과)` 중심
-- 캡션 원칙: “클릭 경로”가 아니라 **무엇을 증명했는지** 한 줄
-
----
-
-## Reddit — 권장 서브 & 제목
-
-- **1차:** `r/aiengineering`
-- **2차(선택):** `r/LLMDevs` — 훅만 “프로덕션 에이전트 배포 전 증거” 톤으로 바꿔 재게시 금지(복붙 금지)
-
-**Title (EN) 예시:**  
-Aggregate metrics looked fine in Live View—then a pre-deploy replay (same saved cases, 10× repeats) surfaced FLAKY/FLAGGED long-tail failures. How do you decide what counts as “enough evidence” before shipping?
-
-**Body (초안):**
-
-We run a small production-ish support bot demo and ingest real-ish traffic into Live View. At a glance, things look “okay” on the usual operational checks.
-
-The part that scared us wasn’t a loud outage—it was that **the scary cases only showed up when we replayed a tight set of saved real requests under a stricter deploy bar**, with repeats to separate “one-off weirdness” from instability.
-
-Here’s the concrete evidence we’re using this week:
-- **Live View:** snapshots are coming in; operational eval highlights are mostly broad-strokes.
-- **Release Gate:** we replay **4** saved cases with **10×** repeats and explicit checks (e.g., required keywords + short/empty + latency thresholds—use whatever your screenshot shows).
-- **Outcome:** mixed health across cases—some **FLAKY**, one line item looked **much worse** than the rest (paste your real numbers).
-
-**Question for the room:** when average looks fine, what’s your minimum deploy evidence—case set size, repeat count, and what failure modes you treat as ship-stoppers?
-
-*(Optional 1-sentence product line, last only:)* We run this loop in **PluvianAI** (capture → saved cases → pre-deploy replay), but I’m more interested in your routine than tooling.
-
----
-
-## Indie Hackers — 제목 & 본문
-
-**Title (EN) 예시:**  
-Our dashboards looked fine—until we replayed saved production-like cases under a deploy gate with repeats.
-
-**Post (초안):**
-
-We’re building validation around LLM apps the same way we’d treat any production system: **you need evidence that matches the decision you’re about to make** (ship / don’t ship).
-
-In Live View, it’s easy to feel reassured: traffic is flowing, snapshots are accumulating, and operational signals look mostly healthy.
-
-But “mostly healthy on averages” isn’t the same thing as “safe to change the thing customers rely on.” So we took a small, high-signal slice of saved real requests and ran them in a pre-deploy gate with **repeat runs**. The result wasn’t “everything is broken”—it was closer to **long-tail risk**: a few intents looked unstable, and one looked consistently bad under the deploy checks (fill in your exact numbers).
-
-What we changed in how we work:
-- **Separate concerns:** operational monitoring vs deploy criteria (they’re not identical).
-- **Repeat on purpose:** same input multiple times to surface **FLAKY** vs deterministic failure.
-- **Case-level verdicts:** FAIL reasons as checklist items, not vibes.
-
-**CTA (고정 1개만 선택):**  
-- (A) 댓글로 “배포 전 최소 증거” 루틴 공유 요청  
-- (B) 트라이얼/웹사이트 1링크(문장 1개)  
-- (C) 이메일/캘린더 등 다음 스텝 1개
-
-If you ship LLM changes weekly: **what evidence would make you stop a release even when aggregate metrics look fine?**
-
+# 2026.04 Week 1 — This Week Execution Plan
+
+## This Week Summary
+
+- continue replying on `r/LangChain`
+- publish `1` post on `r/SaaS`
+- handle comments for the first `30-60` minutes after posting
+- collect strong phrases from Reddit replies
+- prepare a LinkedIn target list of `10` people
+- send LinkedIn DMs the next day
+- publish `1-2` X posts
+- review responses at the end of the week
+
+## This Week Goal
+
+- not user count
+- real conversations with operators
+- repeated pain language
+- follow-up conversation candidates
+
+## Goal
+
+- Main message: **Spot checks and healthy-looking dashboards are not enough to prove an LLM change is safe to ship. Replaying saved real cases and repeating the same runs can surface flaky or unstable behavior before deploy.**
+- This week's objective: **start real conversations with teams shipping prompt/model/agent changes**, not push product links.
+- Success criteria this week:
+  - Reddit comments that answer the deploy-evidence question
+  - LinkedIn replies from people who have this problem
+  - Clear signal on which wording gets the strongest response
+
+## This Week Plan
+
+### 1. Reddit
+
+- **Primary post:** `r/LangChain`
+- **When:** Tuesday `7:00 AM - 8:30 AM EDT`
+  - Korea time: Tuesday `8:00 PM - 9:30 PM KST`
+- **Recommended target:** around `7:10 AM EDT`
+- **Post type:** text-only
+- **Rule for this week:** no link in the main post, no product screenshot in the first post
+
+**Title**
+
+`How are you evaluating multi-step reliability before deploying LangChain agents?`
+
+**Body**
+
+`One thing that keeps bothering me with agent workflows is that a single successful run does not necessarily mean the change is safe to ship.`
+
+`With tool calling, retries, branching, and state, the final answer can look okay while the workflow underneath becomes less stable. We started replaying saved real cases before deploy and repeating the same runs on purpose, and that was where some cases started to look flaky instead of consistently healthy.`
+
+`That made me realize that “looks fine” in a few spot checks is not the same as “safe to deploy.”`
+
+`So I’m curious how people here handle this in practice:`
+
+- `Do you evaluate only the final output, or workflow stability too?`
+- `Do you repeat runs on the same saved cases to catch flaky behavior?`
+- `What would actually make you stop a release before shipping?`
+
+`Especially interested in teams changing prompts, models, or agent workflow logic regularly.`
+
+### 2. Reddit Follow-Up
+
+- **Secondary post:** `r/SaaS`
+- **When:** Wednesday `9:00 AM - 11:00 AM EDT`
+  - Korea time: Wednesday `10:00 PM - Thursday 12:00 AM KST`
+- **Rule:** do not reuse the LangChain body verbatim; rewrite for founder/operator language
+
+**Title**
+
+`How do you decide an LLM change is safe to deploy when spot checks look fine?`
+
+**Body**
+
+`We kept running into the same frustrating pattern: a few manual checks looked fine, dashboards looked healthy, and the change still felt risky.`
+
+`What changed our thinking was replaying saved real cases before deploy and repeating the same runs on purpose. Some cases stayed stable, while others became flaky even with the same input and the same checks.`
+
+`The part that stood out was that final-answer quality could still look okay while the workflow underneath was already getting less stable.`
+
+`So I’m curious how other teams handle this in practice:`
+
+- `How many saved cases do you check?`
+- `Do you repeat runs to catch flaky behavior?`
+- `What would make you stop a release even if overall metrics still look okay?`
+
+`I’m especially interested in teams shipping prompt, model, or agent workflow changes regularly.`
+
+### 3. LinkedIn Outreach
+
+- **When:** after the `r/LangChain` post is live
+- **Target count this week:** `10` people
+- **Who to message:**
+  - AI SaaS founders
+  - founding engineers
+  - applied AI engineers
+  - AI product engineers
+  - people posting recently about agents, prompts, RAG, workflows, or model changes
+- **Do not target:**
+  - investors
+  - recruiters
+  - inactive accounts
+  - people without relevant build/operator context
+
+**DM v1**
+
+`I’m talking to teams running LangChain/LlamaIndex-style agents in production. One thing I keep hearing is that the final answer can look fine while the workflow underneath gets unstable. How are you validating changes before deploy?`
+
+**DM v2**
+
+`I’m looking into how teams decide an LLM prompt/model change is actually safe to ship. We kept seeing “looks fine” in spot checks, then strange differences after deploy. Curious how you handle this today.`
+
+### 4. X Posts
+
+- **Post 1:** same day as `r/LangChain`
+- **Post 2:** about `24` hours later
+
+**X post 1**
+
+`Spot checks looked fine. Dashboards looked fine.`
+`Same saved input, repeated runs, different outcomes.`
+`“Looks fine” isn’t deploy evidence for LLM changes.`
+
+**X post 2**
+
+`One thing that keeps bothering me in LLM releases:`
+`aggregate metrics can look healthy while a few real cases quietly turn flaky.`
+`How do you decide what is actually safe to ship?`
+
+## Comment Handling
+
+- First priority: answer comments on `r/LangChain` within the first `30-60` minutes
+- Do not jump to product explanation
+- Ask follow-up questions first
+- If someone shares a real process, ask:
+  - how many cases they use
+  - whether they repeat runs
+  - what their stop-ship threshold is
+
+## This Week Measurement
+
+- Reddit:
+  - comment count
+  - number of substantive replies
+  - repeated phrases people use to describe the pain
+- LinkedIn:
+  - reply count out of `10`
+  - how many replies mention an existing manual process
+- X:
+  - replies, not impressions, are the main signal
+
+## End-Of-Week Decision Rule
+
+- If LinkedIn gets `2+` meaningful replies out of `10`, keep the DM framing
+- If Reddit gets comments but weak discussion, keep the problem and sharpen the question
+- If both Reddit and LinkedIn stay quiet, rewrite the hook before posting again
+
+## After r/SaaS
+
+### Sequence
+
+1. `r/LangChain` post and comment handling
+2. `r/SaaS` post and comment handling
+3. reaction review and wording review
+4. LinkedIn DM to `10` people
+5. X posts using the best phrases from Reddit
+6. next Reddit experiment with a narrower question
+
+### What To Do Next
+
+- After `r/SaaS`, do not post into another subreddit immediately
+- First review:
+  - which comments contained real deploy criteria
+  - which phrases repeated across replies
+  - which question generated the strongest answers
+- Then send LinkedIn DMs to:
+  - founders
+  - founding engineers
+  - applied AI engineers
+  - AI product engineers
+- Then post `1-2` short X posts using language taken directly from replies
+
+### Candidate X Phrases
+
+- `final output is a lagging indicator`
+- `one successful run is meaningless for agents`
+- `path consistency`
+- `tool call stability`
+- `real failures, not synthetic ones`
+
+### Next Reddit Question Ideas
+
+- `How many saved cases are enough before shipping an LLM change?`
+- `Would you block a release on flaky behavior alone?`
+- `Do you trust final output quality more than workflow stability?`
