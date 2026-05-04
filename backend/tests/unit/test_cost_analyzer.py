@@ -7,6 +7,13 @@ from app.services.cost_analyzer import CostAnalyzer
 from app.models.api_call import APICall
 
 
+def clear_project_api_calls(db, project_id: int) -> None:
+    db.query(APICall).filter(APICall.project_id == project_id).delete(
+        synchronize_session=False
+    )
+    db.commit()
+
+
 @pytest.mark.unit
 class TestCostAnalyzer:
     """Comprehensive tests for Cost Analyzer - all edge cases and error conditions"""
@@ -132,6 +139,7 @@ class TestCostAnalyzer:
     def test_analyze_project_costs(self, db, test_project):
         """Test analyzing project costs"""
         analyzer = CostAnalyzer()
+        clear_project_api_calls(db, test_project.id)
         
         for i in range(5):
             api_call = APICall(
@@ -160,6 +168,7 @@ class TestCostAnalyzer:
     def test_analyze_project_costs_no_data(self, db, test_project):
         """Test analyzing project costs with no data"""
         analyzer = CostAnalyzer()
+        clear_project_api_calls(db, test_project.id)
         
         analysis = analyzer.analyze_project_costs(test_project.id, db=db)
         
@@ -172,6 +181,7 @@ class TestCostAnalyzer:
     def test_analyze_project_costs_custom_date_range(self, db, test_project):
         """Test analyzing project costs with custom date range"""
         analyzer = CostAnalyzer()
+        clear_project_api_calls(db, test_project.id)
         
         start_date = datetime.utcnow() - timedelta(days=14)
         end_date = datetime.utcnow() - timedelta(days=7)
@@ -207,6 +217,7 @@ class TestCostAnalyzer:
     def test_detect_cost_anomaly_yesterday_spike(self, db, test_project):
         """Test detecting cost anomaly compared to yesterday"""
         analyzer = CostAnalyzer()
+        clear_project_api_calls(db, test_project.id)
         
         yesterday = datetime.utcnow() - timedelta(days=1)
         
@@ -249,6 +260,7 @@ class TestCostAnalyzer:
     def test_detect_cost_anomaly_weekly_spike(self, db, test_project):
         """Test detecting cost anomaly compared to weekly average"""
         analyzer = CostAnalyzer()
+        clear_project_api_calls(db, test_project.id)
         
         # 저비용 API calls (7일 전)
         for day in range(7):
@@ -293,6 +305,7 @@ class TestCostAnalyzer:
     def test_detect_cost_anomaly_no_yesterday_data(self, db, test_project):
         """Test cost anomaly detection with no yesterday data"""
         analyzer = CostAnalyzer()
+        clear_project_api_calls(db, test_project.id)
         
         # 오늘만 데이터
         for _ in range(10):
@@ -319,6 +332,7 @@ class TestCostAnalyzer:
     def test_detect_cost_anomaly_no_data(self, db, test_project):
         """Test cost anomaly detection with no data"""
         analyzer = CostAnalyzer()
+        clear_project_api_calls(db, test_project.id)
         
         alerts = analyzer.detect_cost_anomalies(test_project.id, db)
         
@@ -328,6 +342,7 @@ class TestCostAnalyzer:
     def test_detect_cost_anomaly_critical_severity(self, db, test_project):
         """Test cost anomaly detection with critical severity (5x+ increase)"""
         analyzer = CostAnalyzer()
+        clear_project_api_calls(db, test_project.id)
         
         yesterday = datetime.utcnow() - timedelta(days=1)
         
