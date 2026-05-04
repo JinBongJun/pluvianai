@@ -86,6 +86,12 @@ DEFAULT_BOOTSTRAP_ORG_NAME = "My Organization"
 DEFAULT_BOOTSTRAP_PROJECT_NAME = "My First Project"
 
 
+def _auth_cookie_domain() -> str | None:
+    if settings.ENVIRONMENT != "production":
+        return None
+    return settings.AUTH_COOKIE_DOMAIN or None
+
+
 def _token_max_age_seconds(token: str, fallback_seconds: int) -> int:
     payload = decode_token(token)
     if not payload:
@@ -105,7 +111,7 @@ def _token_max_age_seconds(token: str, fallback_seconds: int) -> int:
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     secure = settings.ENVIRONMENT == "production"
-    cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
+    cookie_domain = _auth_cookie_domain()
     csrf_token = generate_csrf_token()
 
     response.set_cookie(
@@ -147,7 +153,7 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
+    cookie_domain = _auth_cookie_domain()
     response.delete_cookie(ACCESS_COOKIE_NAME, path="/", domain=cookie_domain)
     response.delete_cookie(REFRESH_COOKIE_NAME, path="/", domain=cookie_domain)
     response.delete_cookie(CSRF_COOKIE_NAME, path="/", domain=cookie_domain)
@@ -155,7 +161,7 @@ def _clear_auth_cookies(response: Response) -> None:
 
 def _set_oauth_state_cookie(response: Response, state_token: str) -> None:
     secure = settings.ENVIRONMENT == "production"
-    cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
+    cookie_domain = _auth_cookie_domain()
     response.set_cookie(
         key=OAUTH_STATE_COOKIE_NAME,
         value=state_token,
@@ -169,7 +175,7 @@ def _set_oauth_state_cookie(response: Response, state_token: str) -> None:
 
 
 def _clear_oauth_state_cookie(response: Response) -> None:
-    cookie_domain = settings.AUTH_COOKIE_DOMAIN or None
+    cookie_domain = _auth_cookie_domain()
     response.delete_cookie(OAUTH_STATE_COOKIE_NAME, path="/", domain=cookie_domain)
 
 
