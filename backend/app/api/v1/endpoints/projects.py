@@ -302,8 +302,9 @@ async def update_project(
 ):
     """Update a project (owner/admin only)"""
     project = check_project_access(project_id, current_user, db, required_roles=[ProjectRole.OWNER, ProjectRole.ADMIN])
+    project_updates = project_data.model_dump(exclude_unset=True)
 
-    logger.info(f"Updating project {project_id}", extra={"updates": project_data.dict(exclude_unset=True)})
+    logger.info(f"Updating project {project_id}", extra={"updates": project_updates})
 
     # Check for duplicate name if name is being updated
     if project_data.name and project_data.name != project.name:
@@ -366,7 +367,7 @@ async def update_project(
         activity_data={
             "project_name": project.name,
             "project_id": project_id,
-            "changes": project_data.dict(exclude_unset=True),
+            "changes": project_updates,
         },
     )
     
@@ -374,7 +375,7 @@ async def update_project(
     ip_address = request.client.host if request and request.client else None
     user_agent = request.headers.get("user-agent") if request else None
     old_value = {"name": project.name, "description": project.description}
-    new_value = project_data.dict(exclude_unset=True)
+    new_value = project_updates
     audit_service.log_action(
         user_id=current_user.id,
         action="project_updated",
