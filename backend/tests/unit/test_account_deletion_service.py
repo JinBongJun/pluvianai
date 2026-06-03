@@ -1,5 +1,11 @@
+from datetime import datetime, timezone
+from unittest.mock import patch
+
+import pytest
+
+from app.models.subscription import Subscription
 from app.models.user import User
-from app.services.account_deletion_service import AccountDeletionService
+from app.services.account_deletion_service import AccountDeletionBlocked, AccountDeletionService
 
 
 def test_tombstone_inactive_user_identities_updates_legacy_deleted_accounts(db):
@@ -48,3 +54,52 @@ def test_tombstone_inactive_user_identities_updates_legacy_deleted_accounts(db):
     assert legacy_deleted.google_login_enabled is False
     assert already_tombstoned.email == "deleted-user-999-1234567890@deleted.local"
     assert already_tombstoned.google_id == "deleted-google-999-1234567890"
+
+
+def test_delete_account_blocks_when_provider_subscription_is_still_active(db, test_user):
+    test_user.paddle_customer_id = "ctm_live"
+    db.add(
+        Subscription(
+            user_id=test_user.id,
+            plan_type="pro",
+            status="cancelled",
+            current_period_end=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            paddle_customer_id="ctm_live",
+            paddle_subscription_id="sub_local_cancelled",
+        )
+    )
+    db.commit()
+
+    with patch(
+        "app.services.account_deletion_service.BillingService.get_provider_billing_state_for_user",
+        return_value=(
+            {
+                "blocking": True,
+                "blocking_subscription_ids": ["sub_live_active"],
+                "subscriptions": [{"id": "sub_live_active", "status": "active"}],
+            },
+            None,
+        ),
+    ):
+        with pytest.raises(AccountDeletionBlocked) as exc:
+            AccountDeletionService(db).delete_account(test_user)
+
+    assert exc.value.code == "ACTIVE_PROVIDER_SUBSCRIPTION"
+    db.refresh(test_user)
+    assert test_user.is_active is True
+
+
+def test_delete_account_blocks_when_provider_lookup_fails(db, test_user):
+    test_user.paddle_customer_id = "ctm_live"
+    db.commit()
+
+    with patch(
+        "app.services.account_deletion_service.BillingService.get_provider_billing_state_for_user",
+        return_value=({"blocking": False}, "paddle_lookup_failed"),
+    ):
+        with pytest.raises(AccountDeletionBlocked) as exc:
+            AccountDeletionService(db).delete_account(test_user)
+
+    assert exc.value.code == "BILLING_PROVIDER_LOOKUP_FAILED"
+    db.refresh(test_user)
+    assert test_user.is_active is True

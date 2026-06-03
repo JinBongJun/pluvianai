@@ -288,15 +288,21 @@ class TestBillingService:
                 )
                 with patch.object(service, "_get_paddle_price_id", return_value="pri_test"):
                     with patch.object(service, "_get_or_create_paddle_customer", return_value="ctm_test"):
-                        result = service.create_checkout_session(
-                            test_user.id,
-                            "pro",
-                            "https://success.com",
-                            "https://cancel.com",
-                        )
+                        with patch.object(
+                            service,
+                            "get_provider_billing_state_for_user",
+                            return_value=({"blocking": False, "blocking_subscription_ids": []}, None),
+                        ):
+                            result, err = service.create_checkout_session(
+                                test_user.id,
+                                "pro",
+                                "https://success.com",
+                                "https://cancel.com",
+                            )
         called_payload = mock_post.call_args.args[1]
         assert called_payload["checkout"]["success_url"] == "https://success.com"
         assert "url" not in called_payload["checkout"]
+        assert err is None
         assert result is not None
         assert result["session_id"] == "txn_test_123"
         assert result["url"].startswith("https://")
@@ -305,38 +311,64 @@ class TestBillingService:
         with patch("app.services.billing_service.settings") as mock_settings:
             mock_settings.PADDLE_API_KEY = ""
             service = BillingService(db)
-            result = service.create_checkout_session(
+            result, err = service.create_checkout_session(
                 test_user.id,
                 "pro",
                 "https://success.com",
                 "https://cancel.com",
             )
         assert result is None
+        assert err == "paddle_not_configured"
 
     def test_create_checkout_session_no_price_id(self, db, test_user):
         with patch("app.services.billing_service.settings") as mock_settings:
             mock_settings.PADDLE_API_KEY = "pdl_test_key"
             service = BillingService(db)
             with patch.object(service, "_get_paddle_price_id", return_value=None):
-                result = service.create_checkout_session(
+                result, err = service.create_checkout_session(
                     test_user.id,
                     "pro",
                     "https://success.com",
                     "https://cancel.com",
                 )
         assert result is None
+        assert err == "paddle_error"
 
     def test_create_checkout_session_rejects_non_self_serve_plan(self, db, test_user):
         with patch("app.services.billing_service.settings") as mock_settings:
             mock_settings.PADDLE_API_KEY = "pdl_test_key"
             service = BillingService(db)
-            result = service.create_checkout_session(
+            result, err = service.create_checkout_session(
                 test_user.id,
                 "free",
                 "https://success.com",
                 "https://cancel.com",
             )
         assert result is None
+        assert err == "invalid_plan"
+
+    def test_create_checkout_session_blocks_existing_provider_subscription(self, db, test_user):
+        with patch("app.services.billing_service.settings") as mock_settings:
+            mock_settings.PADDLE_API_KEY = "pdl_test_key"
+            service = BillingService(db)
+            with patch.object(service, "_get_paddle_price_id", return_value="pri_test"):
+                with patch.object(service, "_get_or_create_paddle_customer", return_value="ctm_test"):
+                    with patch.object(
+                        service,
+                        "get_provider_billing_state_for_user",
+                        return_value=({"blocking": True, "blocking_subscription_ids": ["sub_live"]}, None),
+                    ):
+                        with patch.object(service, "_paddle_post") as mock_post:
+                            result, err = service.create_checkout_session(
+                                test_user.id,
+                                "pro",
+                                "https://success.com",
+                                "https://cancel.com",
+                            )
+
+        assert result is None
+        assert err == "existing_subscription"
+        assert not mock_post.called
 
     def test_create_customer_portal_session_success_prefers_cancel_link(self, db, test_user):
         sub = Subscription(
@@ -785,7 +817,32 @@ class TestBillingService:
         )
         db.commit()
 
-        result, err = BillingService(db).get_billing_timeline_for_user(test_user.id, event_limit=10)
+        with patch.object(
+            BillingService,
+            "get_provider_billing_state_for_user",
+            return_value=(
+                {
+                    "customer_id": "ctm_timeline_1",
+                    "subscription_id": "sub_timeline_1",
+                    "blocking": True,
+                    "blocking_subscription_ids": ["sub_live_extra"],
+                    "subscriptions": [
+                        {
+                            "id": "sub_timeline_1",
+                            "status": "cancelled",
+                            "customer_id": "ctm_timeline_1",
+                        },
+                        {
+                            "id": "sub_live_extra",
+                            "status": "active",
+                            "customer_id": "ctm_timeline_1",
+                        },
+                    ],
+                },
+                None,
+            ),
+        ):
+            result, err = BillingService(db).get_billing_timeline_for_user(test_user.id, event_limit=10)
 
         assert err is None
         assert result is not None
@@ -794,6 +851,45 @@ class TestBillingService:
         assert result["current_entitlement"]["entitlement_status"] == "active_until_period_end"
         assert len(result["events"]) == 1
         assert result["events"][0]["event_type"] == "subscription.canceled"
+        assert result["provider_live"]["blocking_subscription_count"] == 1
+        assert result["provider_live"]["stored_subscription_found"] is True
+        assert result["provider_live"]["has_untracked_blocking_subscription"] is True
+
+    def test_scan_deleted_users_with_active_provider_subscriptions_reports_findings(self, db):
+        deleted_user = User(
+            email="deleted-billing@example.com",
+            hashed_password="hash",
+            full_name="Deleted Billing",
+            is_active=False,
+            paddle_customer_id="ctm_deleted_live",
+        )
+        db.add(deleted_user)
+        db.commit()
+        db.refresh(deleted_user)
+
+        service = BillingService(db)
+        service.paddle_available = True
+        with patch.object(
+            service,
+            "get_provider_billing_state_for_user",
+            return_value=(
+                {
+                    "customer_id": "ctm_deleted_live",
+                    "subscription_id": None,
+                    "blocking": True,
+                    "blocking_subscription_ids": ["sub_deleted_live"],
+                    "subscriptions": [{"id": "sub_deleted_live", "status": "active"}],
+                },
+                None,
+            ),
+        ):
+            result = service.scan_deleted_users_with_active_provider_subscriptions(limit=10)
+
+        assert result["status"] == "success"
+        assert result["checked"] == 1
+        assert result["finding_count"] == 1
+        assert result["findings"][0]["user_id"] == deleted_user.id
+        assert result["findings"][0]["blocking_subscription_ids"] == ["sub_deleted_live"]
 
     def test_change_paddle_subscription_plan_upgrade_uses_prorated_immediately(self, db, test_user):
         sub = Subscription(

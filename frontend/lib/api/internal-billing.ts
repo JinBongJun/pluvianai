@@ -10,4 +10,21 @@ export const internalBillingAPI = {
     });
     return unwrapResponse(response);
   },
+
+  reconcileUserBilling: async (userId: number) => {
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw new Error(`Invalid user id: ${userId}`);
+    }
+    const response = await apiClient.post(`/billing/reconcile/users/${userId}`, {});
+    return unwrapResponse(response);
+  },
+
+  retryWebhookEvent: async (eventId: string) => {
+    const normalized = String(eventId || "").trim();
+    if (!normalized) {
+      throw new Error("Missing webhook event id");
+    }
+    const response = await apiClient.post(`/billing/webhook/retry/${encodeURIComponent(normalized)}`, {});
+    return unwrapResponse(response);
+  },
 };

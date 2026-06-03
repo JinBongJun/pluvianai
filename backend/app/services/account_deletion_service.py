@@ -14,6 +14,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.models.user_api_key import UserApiKey
+from app.services.billing_service import BillingService
 
 
 @dataclass
@@ -99,6 +100,21 @@ class AccountDeletionService:
 
         return True
 
+    def _ensure_no_blocking_provider_subscription(self, user: User) -> None:
+        provider_state, err = BillingService(self.db).get_provider_billing_state_for_user(int(user.id))
+        if err:
+            raise AccountDeletionBlocked(
+                code="BILLING_PROVIDER_LOOKUP_FAILED",
+                message="Could not verify your billing status with Paddle. Try again shortly or contact support before deleting your account.",
+                status_code=503,
+            )
+        if provider_state.get("blocking"):
+            raise AccountDeletionBlocked(
+                code="ACTIVE_PROVIDER_SUBSCRIPTION",
+                message="Cancel your active subscription in Billing before deleting your account. Account deletion is available after billing is fully inactive.",
+                status_code=409,
+            )
+
     def _owned_organizations(self, user_id: int) -> list[Organization]:
         return (
             self.db.query(Organization)
@@ -127,6 +143,8 @@ class AccountDeletionService:
                 message="Cancel your active subscription in Billing before deleting your account.",
                 status_code=409,
             )
+
+        self._ensure_no_blocking_provider_subscription(user)
 
         for org in self._owned_organizations(user.id):
             if self._organization_has_other_members(int(org.id), user.id):

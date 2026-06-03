@@ -72,7 +72,7 @@ class TestBillingAPI:
 
     @patch(
         "app.services.billing_service.BillingService.create_checkout_session",
-        return_value={"session_id": "txn_test_123", "url": "https://checkout.paddle.com/test"},
+        return_value=({"session_id": "txn_test_123", "url": "https://checkout.paddle.com/test"}, None),
     )
     async def test_create_checkout_session_success(self, _mock_checkout, async_client, auth_headers):
         """Test creating Paddle checkout session successfully (service mocked)."""
@@ -90,7 +90,7 @@ class TestBillingAPI:
         data = response.json()["data"]
         assert "session_id" in data or "url" in data
 
-    @patch("app.services.billing_service.BillingService.create_checkout_session", return_value=None)
+    @patch("app.services.billing_service.BillingService.create_checkout_session", return_value=(None, "paddle_error"))
     async def test_create_checkout_session_paddle_unavailable(self, _mock_checkout, async_client, auth_headers):
         """Test creating checkout session when Paddle checkout cannot be created"""
         response = await async_client.post(
@@ -105,6 +105,24 @@ class TestBillingAPI:
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
         body = response.json()
         assert body["error"]["code"] == "BILLING_CHECKOUT_UNAVAILABLE"
+
+    @patch(
+        "app.services.billing_service.BillingService.create_checkout_session",
+        return_value=(None, "existing_subscription"),
+    )
+    async def test_create_checkout_session_existing_subscription(self, _mock_checkout, async_client, auth_headers):
+        response = await async_client.post(
+            "/api/v1/billing/checkout",
+            json={
+                "plan_type": "pro",
+                "success_url": "https://example.com/success",
+                "cancel_url": "https://example.com/cancel",
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.json()["error"]["code"] == "BILLING_EXISTING_SUBSCRIPTION"
 
     async def test_create_checkout_session_unauthorized(self, async_client):
         """Test creating checkout session without authentication"""

@@ -266,6 +266,11 @@ class SchedulerService:
             billing = BillingService(db)
             result = billing.reconcile_paddle_subscriptions(limit=500)
             logger.info("Scheduled billing reconciliation result: %s", result)
+            deleted_scan = billing.scan_deleted_users_with_active_provider_subscriptions(limit=200)
+            if int(deleted_scan.get("finding_count") or 0) > 0:
+                logger.warning("Deleted-user billing scan found active provider subscriptions: %s", deleted_scan)
+            else:
+                logger.info("Deleted-user billing scan result: %s", deleted_scan)
         except Exception as e:
             logger.error(f"Error in scheduled billing reconciliation: {str(e)}", exc_info=True)
         finally:

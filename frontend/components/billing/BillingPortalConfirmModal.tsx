@@ -77,8 +77,8 @@ export function BillingPortalConfirmModal({
             className="mt-3 text-sm leading-relaxed text-amber-200/95"
           >
             If you cancel your subscription, you will lose access to paid plan limits when the current
-            period ends (per your Paddle subscription settings). You can manage cancellation and
-            invoices in our billing portal.
+            period ends (per your Paddle subscription settings). Account deletion does not cancel
+            billing; manage cancellation and invoices in our billing portal first.
           </p>
         </div>
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/5 bg-black/20">

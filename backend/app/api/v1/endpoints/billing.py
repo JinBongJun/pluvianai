@@ -61,12 +61,24 @@ def create_checkout_session(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
     billing = BillingService(db)
-    result = billing.create_checkout_session(
+    result, err = billing.create_checkout_session(
         user_id=current_user.id,
         plan_type=normalized,
         success_url=str(req.success_url),
         cancel_url=str(req.cancel_url),
     )
+    if err == "existing_subscription":
+        return error_response(
+            code="BILLING_EXISTING_SUBSCRIPTION",
+            message="An existing subscription is still active or pending cancellation. Manage it in Billing instead of starting a new checkout.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+    if err == "paddle_lookup_failed":
+        return error_response(
+            code="BILLING_PROVIDER_LOOKUP_FAILED",
+            message="Could not verify your current billing status. Try again shortly or contact support.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
     if not result or not result.get("url"):
         return error_response(
             code="BILLING_CHECKOUT_UNAVAILABLE",

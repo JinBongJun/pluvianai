@@ -45,6 +45,7 @@ type NoticeTone = "success" | "error" | "warning";
 type AccountUsage = {
   plan_type?: string;
   subscription_status?: string;
+  entitlement_status?: string;
   current_period_end?: string | null;
 };
 
@@ -142,26 +143,28 @@ function ProfileSettingsPageContent() {
   const hasBlockingSubscription = useMemo(() => {
     const planType = String(accountUsage?.plan_type || "free").toLowerCase();
     const subscriptionStatus = String(accountUsage?.subscription_status || "free").toLowerCase();
+    const entitlementStatus = String(accountUsage?.entitlement_status || "free").toLowerCase();
     if (planType === "free") return false;
+    if (entitlementStatus === "active_until_period_end") return true;
     if (subscriptionStatus === "cancelled" || subscriptionStatus === "canceled" || subscriptionStatus === "free") {
       return false;
     }
     return true;
-  }, [accountUsage?.plan_type, accountUsage?.subscription_status]);
+  }, [accountUsage?.entitlement_status, accountUsage?.plan_type, accountUsage?.subscription_status]);
 
   const subscriptionDeletionNotice = useMemo(() => {
     if (!hasBlockingSubscription) return null;
     const periodEnd = accountUsage?.current_period_end;
     if (!periodEnd) {
-      return "Active subscription found. Account deletion becomes available after the current billing period ends.";
+      return "Active billing found. Account deletion does not cancel billing. Cancel your subscription in Billing first; deletion becomes available after billing is fully inactive.";
     }
 
     const parsed = new Date(periodEnd);
     if (Number.isNaN(parsed.getTime())) {
-      return "Active subscription found. Account deletion becomes available after the current billing period ends.";
+      return "Active billing found. Account deletion does not cancel billing. Cancel your subscription in Billing first; deletion becomes available after billing is fully inactive.";
     }
 
-    return `Active subscription found. Your plan remains active until ${parsed.toLocaleString()}. Account deletion becomes available after that date.`;
+    return `Active billing found. Account deletion does not cancel billing. Your plan remains active until ${parsed.toLocaleString()}; deletion becomes available after billing is fully inactive.`;
   }, [accountUsage?.current_period_end, hasBlockingSubscription]);
 
   const deleteRequiresPassword = !!profile?.password_login_enabled;

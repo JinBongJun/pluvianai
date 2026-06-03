@@ -9,6 +9,7 @@ import hmac
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 import httpx
 from sqlalchemy.orm import Session
@@ -58,6 +59,8 @@ def verify_paddle_webhook_signature(raw_body: bytes, signature_header: str, secr
 
 class BillingService:
     """Service for billing (Paddle) and usage tracking"""
+
+    PROVIDER_BLOCKING_STATUSES = {"active", "trialing", "past_due", "paused"}
 
     def __init__(self, db: Session):
         self.db = db
@@ -113,6 +116,124 @@ class BillingService:
         except Exception as e:
             logger.error("Paddle API request failed: %s", str(e), exc_info=True)
             return None, str(e)
+
+    def get_paddle_subscription(self, subscription_id: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        sub_id = str(subscription_id or "").strip()
+        if not sub_id:
+            return None, "missing_subscription_id"
+        data, err = self._paddle_get(f"subscriptions/{quote(sub_id, safe='')}")
+        if not isinstance(data, dict):
+            return None, err or "paddle_lookup_failed"
+        return data, None
+
+    def list_paddle_customer_subscriptions(self, customer_id: str) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+        cust_id = str(customer_id or "").strip()
+        if not cust_id:
+            return [], None
+        data, err = self._paddle_get(f"subscriptions?customer_id={quote(cust_id, safe='')}")
+        if data is None:
+            return None, err or "paddle_lookup_failed"
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)], None
+        if isinstance(data, dict):
+            items = data.get("data") or data.get("items") or []
+            if isinstance(items, list):
+                return [item for item in items if isinstance(item, dict)], None
+        return [], None
+
+    def _paddle_subscription_period_end(self, data: Dict[str, Any]) -> Optional[datetime]:
+        cbp = data.get("current_billing_period") or data.get("billing_period") or {}
+        if not isinstance(cbp, dict):
+            return None
+        return self._parse_paddle_datetime(cbp.get("ends_at"))
+
+    def _is_provider_subscription_blocking(self, data: Dict[str, Any], *, now: Optional[datetime] = None) -> bool:
+        status = self._normalize_paddle_status(str(data.get("status") or "")).strip().lower()
+        if status in self.PROVIDER_BLOCKING_STATUSES:
+            return True
+        if status == "cancelled":
+            period_end = self._paddle_subscription_period_end(data)
+            current_time = now or datetime.now(timezone.utc)
+            if period_end is not None and period_end > current_time:
+                return True
+        return False
+
+    def _summarize_paddle_subscription(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        cbp = data.get("current_billing_period") or {}
+        return {
+            "id": data.get("id"),
+            "status": str(data.get("status") or ""),
+            "customer_id": data.get("customer_id"),
+            "next_billed_at": data.get("next_billed_at"),
+            "current_period_starts_at": cbp.get("starts_at") if isinstance(cbp, dict) else None,
+            "current_period_ends_at": cbp.get("ends_at") if isinstance(cbp, dict) else None,
+        }
+
+    def get_provider_billing_state_for_user(self, user_id: int) -> Tuple[Dict[str, Any], Optional[str]]:
+        """
+        Return live Paddle subscription state for safety-critical decisions.
+        Paddle is the source of truth; local DB state is only a hint for identifiers.
+        """
+        subscription = self.db.query(Subscription).filter(Subscription.user_id == user_id).first()
+        user = self.db.query(User).filter(User.id == user_id).first()
+        customer_id = (
+            (subscription.paddle_customer_id or "").strip()
+            if subscription and subscription.paddle_customer_id
+            else (user.paddle_customer_id or "").strip()
+            if user and user.paddle_customer_id
+            else ""
+        )
+        subscription_id = (subscription.paddle_subscription_id or "").strip() if subscription else ""
+
+        state: Dict[str, Any] = {
+            "customer_id": customer_id or None,
+            "subscription_id": subscription_id or None,
+            "blocking": False,
+            "blocking_subscription_ids": [],
+            "subscriptions": [],
+        }
+        if not customer_id and not subscription_id:
+            return state, None
+        if not self.paddle_available:
+            return state, "paddle_not_configured"
+
+        seen: set[str] = set()
+        live_subscriptions: List[Dict[str, Any]] = []
+
+        if subscription_id:
+            data, err = self.get_paddle_subscription(subscription_id)
+            if not data:
+                return state, "paddle_lookup_failed"
+            live_subscriptions.append(data)
+            if data.get("id"):
+                seen.add(str(data.get("id")))
+
+        if customer_id:
+            items, err = self.list_paddle_customer_subscriptions(customer_id)
+            if items is None:
+                logger.warning(
+                    "Paddle customer subscription lookup failed",
+                    extra={"user_id": user_id, "customer_id": customer_id, "error": err},
+                )
+                return state, "paddle_lookup_failed"
+            for item in items:
+                item_id = str(item.get("id") or "")
+                if item_id and item_id in seen:
+                    continue
+                live_subscriptions.append(item)
+                if item_id:
+                    seen.add(item_id)
+
+        summaries = [self._summarize_paddle_subscription(item) for item in live_subscriptions]
+        blocking_ids = [
+            str(item.get("id"))
+            for item in live_subscriptions
+            if item.get("id") and self._is_provider_subscription_blocking(item)
+        ]
+        state["subscriptions"] = summaries
+        state["blocking"] = bool(blocking_ids)
+        state["blocking_subscription_ids"] = blocking_ids
+        return state, None
 
     def _paddle_patch(self, path: str, json_body: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         if not self.paddle_available:
@@ -499,6 +620,66 @@ class BillingService:
             "stale_event_ignored": stale,
         }
 
+    def scan_deleted_users_with_active_provider_subscriptions(self, limit: int = 200) -> Dict[str, Any]:
+        """Find tombstoned/inactive users that still have billable Paddle subscriptions."""
+        if not self.paddle_available:
+            return {"status": "skipped", "reason": "paddle_not_configured", "checked": 0, "findings": []}
+
+        users = (
+            self.db.query(User)
+            .filter(User.is_active.is_(False))
+            .order_by(User.id.desc())
+            .limit(max(1, min(int(limit), 1000)))
+            .all()
+        )
+
+        checked = 0
+        failed = 0
+        findings: List[Dict[str, Any]] = []
+        for user in users:
+            subscription = self.db.query(Subscription).filter(Subscription.user_id == user.id).first()
+            has_provider_id = bool(
+                (getattr(user, "paddle_customer_id", None) or "").strip()
+                or (subscription and ((subscription.paddle_customer_id or "").strip() or (subscription.paddle_subscription_id or "").strip()))
+            )
+            if not has_provider_id:
+                continue
+
+            checked += 1
+            state, err = self.get_provider_billing_state_for_user(int(user.id))
+            if err:
+                failed += 1
+                findings.append(
+                    {
+                        "user_id": user.id,
+                        "email": user.email,
+                        "error": err,
+                        "paddle_customer_id": state.get("customer_id"),
+                        "paddle_subscription_id": state.get("subscription_id"),
+                    }
+                )
+                continue
+
+            if state.get("blocking"):
+                findings.append(
+                    {
+                        "user_id": user.id,
+                        "email": user.email,
+                        "paddle_customer_id": state.get("customer_id"),
+                        "local_subscription_id": state.get("subscription_id"),
+                        "blocking_subscription_ids": state.get("blocking_subscription_ids") or [],
+                        "subscriptions": state.get("subscriptions") or [],
+                    }
+                )
+
+        return {
+            "status": "success",
+            "checked": checked,
+            "failed": failed,
+            "finding_count": len(findings),
+            "findings": findings,
+        }
+
     def get_billing_timeline_for_user(self, user_id: int, event_limit: int = 20) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Return current billing state plus recent billing events for operator debugging."""
         user = self.db.query(User).filter(User.id == user_id).first()
@@ -535,6 +716,23 @@ class BillingService:
                     value = value.replace(tzinfo=timezone.utc)
                 return value.isoformat()
             return str(value)
+
+        provider_state, provider_err = self.get_provider_billing_state_for_user(user_id)
+        local_sub_id = (subscription.paddle_subscription_id or "").strip() if subscription else ""
+        live_sub_ids = {
+            str(row.get("id"))
+            for row in provider_state.get("subscriptions", [])
+            if isinstance(row, dict) and row.get("id")
+        }
+        provider_live = {
+            **provider_state,
+            "lookup_error": provider_err,
+            "blocking_subscription_count": len(provider_state.get("blocking_subscription_ids") or []),
+            "stored_subscription_found": bool(local_sub_id and local_sub_id in live_sub_ids),
+            "has_untracked_blocking_subscription": any(
+                str(sub_id) != local_sub_id for sub_id in (provider_state.get("blocking_subscription_ids") or [])
+            ),
+        }
 
         payload = {
             "user": {
@@ -604,6 +802,7 @@ class BillingService:
                 }
                 for row in events
             ],
+            "provider_live": provider_live,
         }
         return payload, None
 
@@ -761,26 +960,43 @@ class BillingService:
         plan_type: str,
         success_url: str,
         cancel_url: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Create a Paddle transaction and return checkout URL (and transaction id)."""
         if not self.paddle_available:
             logger.error("Paddle not configured (missing PADDLE_API_KEY)")
-            return None
+            return None, "paddle_not_configured"
 
         plan_type = normalize_plan_type(plan_type)
         if plan_type not in ("starter", "pro"):
             logger.warning("Checkout rejected for plan_type=%s", plan_type)
-            return None
+            return None, "invalid_plan"
 
         price_id = self._get_paddle_price_id(plan_type)
         if not price_id:
             logger.error(f"No Paddle price ID configured for plan {plan_type}")
-            return None
+            return None, "paddle_error"
 
         customer_id = self._get_or_create_paddle_customer(user_id)
         if not customer_id:
             logger.error(f"Failed to get or create Paddle customer for user {user_id}")
-            return None
+            return None, "paddle_error"
+
+        provider_state, state_err = self.get_provider_billing_state_for_user(user_id)
+        if state_err:
+            logger.warning(
+                "Checkout blocked because Paddle billing state could not be verified",
+                extra={"user_id": user_id, "error": state_err},
+            )
+            return None, "paddle_lookup_failed"
+        if provider_state.get("blocking"):
+            logger.info(
+                "Checkout blocked because an existing Paddle subscription is still billable",
+                extra={
+                    "user_id": user_id,
+                    "blocking_subscription_ids": provider_state.get("blocking_subscription_ids"),
+                },
+            )
+            return None, "existing_subscription"
 
         payload: Dict[str, Any] = {
             "items": [{"price_id": price_id, "quantity": 1}],
@@ -803,18 +1019,18 @@ class BillingService:
         data, err = self._paddle_post("transactions", payload)
         if not data:
             logger.error(f"Failed to create Paddle transaction: {err}")
-            return None
+            return None, "paddle_error"
 
         checkout_obj = data.get("checkout") or {}
         url = checkout_obj.get("url")
         if not url:
             logger.error("Paddle transaction created but no checkout.url in response")
-            return None
+            return None, "paddle_error"
 
         return {
             "session_id": data.get("id"),
             "url": url,
-        }
+        }, None
 
     @staticmethod
     def _self_serve_paid_plan_rank(plan_type: str) -> Optional[int]:
