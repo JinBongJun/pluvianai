@@ -28,7 +28,7 @@
   "dependencies": {
     "@paddle/paddle-js": "^1.6.2",
     "@sentry/nextjs": "^10.48.0",
-    "autoprefixer": "^10.4.16",
+    "autoprefixer": "^10.5.0",
     "axios": "^1.15.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.33.0",
